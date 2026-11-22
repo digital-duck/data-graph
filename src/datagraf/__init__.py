@@ -11,7 +11,7 @@ from .checks import model_problems, schema_problems
 from .lineage import build, downstream, join_graph, resolve, sql_refs, upstream
 from .model import Dataset, Field, Metric, ModelError, Relationship, SemanticModel, load, load_models
 
-__version__ = "0.1.0.dev0"
+__version__ = "0.1.0.dev1"
 
 __all__ = ["Dataset", "Field", "Metric", "ModelError", "Relationship", "SemanticModel", "build", "downstream",
            "join_graph", "load", "load_models", "model_problems", "resolve", "schema_problems", "sql_refs", "upstream"]

@@ -1,0 +1,132 @@
+# ossie_draft: a SQLite database -> may we write the model there? (program + Cedar GUARD, before any model call) -> the
+# catalogue skeleton and sample rows (program) -> descriptions, synonyms, dimensions and metrics (model) -> a check
+# (program: schema, references, the skeleton's structure unchanged, every dataset metric runs on the data) -> up to
+# max_repairs repairs while it fails -> the model written (risky, behind the GUARD), or the error exit `invalid`.
+version: "1.0-graph"
+workflow:
+  name: ossie_draft
+  description: Drafts a checked Ossie semantic model from a SQLite catalogue. At most 1 + max_repairs model calls.
+  inputs:
+    - {name: db, type: TEXT, description: absolute path to the SQLite database (opened read-only)}
+    - {name: output_path, type: TEXT, description: "absolute path of the model to write, e.g. .../shop.semantic_model.yaml"}
+    - {name: name, type: TEXT, default: "", description: the model's name (default the database file's stem)}
+    - {name: overwrite, type: TEXT, default: "no"}
+    - {name: sample_rows, type: INTEGER, default: 3}
+    - {name: max_repairs, type: INTEGER, default: 2}
+  outputs:
+    - {name: path, type: TEXT}
+    - {name: validation, type: TEXT}
+  errors:
+    - {name: refused, code: E_WRITE_REFUSED, description: the policy refused to write to this path}
+    - {name: invalid, code: E_MODEL_INVALID, description: still failing the checks after the repair attempts}
+resources:
+  prompts:
+    enrich: ./prompts/enrich.md
+    repair: ./prompts/repair.md
+  policies:
+    write: ./policies/write.cedar
+steps:
+  - plan:
+      node: SOLVE
+      in: {db: $in.db, output_path: $in.output_path, overwrite: $in.overwrite}
+      ports: [trigger, complete, in_db, in_output_path, in_overwrite, out_plan]
+      out: plan
+      backend: subprocess
+      command: ["python3", "-I", "-m", "datagraf.tool", "draft_plan"]
+      out_type: JSON
+      timeout: 60
+  - allowed:
+      guard: policies.write
+      principal: 'Service::"data-graf"'
+      action: 'Action::"write_model"'
+      resource: 'File::"model"'
+      context_mapping: {write_ok: "json_get(@in_plan, 'write_ok')"}
+      in: {plan: plan.plan}
+  - why_refused: {solve: "'refused by policies/write.cedar: the path must be absolute and under your home or the temporary folder, the database must exist, and an existing file needs overwrite yes'", on: allowed.deny, out: text}
+  - refused: {output: {path: why_refused.text, validation: why_refused.text}, on: why_refused, exit: refused}
+
+  - skeleton:
+      node: SOLVE
+      on: allowed.allow
+      in: {db: $in.db, name: $in.name, sample_rows: $in.sample_rows}
+      ports: [trigger, complete, in_db, in_name, in_sample_rows, out_draft]
+      out: draft
+      backend: subprocess
+      command: ["python3", "-I", "-m", "datagraf.tool", "draft_skeleton"]
+      out_type: JSON
+      timeout: 120
+      label: Read the catalogue
+  - skel:    {solve: "json_get(@in_d, 'skeleton')", in: {d: skeleton.draft}, out: text}
+  - samples: {solve: "json_get(@in_d, 'samples')", in: {d: skeleton.draft}, out: text}
+  - enrich:  {generate: prompts.enrich, in: {skeleton: skel.text, samples: samples.text}, out: yaml, label: Describe the data and add metrics}
+  - first:
+      node: SOLVE
+      in: {candidate: enrich.yaml, skeleton: skel.text, db: $in.db}
+      ports: [trigger, complete, in_candidate, in_skeleton, in_db, out_check]
+      out: check
+      backend: subprocess
+      command: ["python3", "-I", "-m", "datagraf.tool", "draft_check"]
+      out_type: JSON
+      timeout: 300
+      label: Check the model
+  - repairs:
+      loop: "@in_max"
+      while: "NOT @ok"
+      index: round
+      in: {max: $in.max_repairs, first: first.check, skeleton: skel.text, db: $in.db}
+      state:
+        check: {from: [current.check, again.check], init: {}}
+        ok: {from: ok.ok, init: false}
+      steps:
+        - current:
+            node: SOLVE
+            in: {first: $loop.first, check: $loop.check}
+            ports: [trigger, complete, in_first, in_check, out_check]
+            out: check
+            backend: subprocess
+            command: ["python3", "-I", "-m", "datagraf.tool", "pick"]
+            out_type: JSON
+            timeout: 60
+        - ok:      {solve: "json_get(@in_check, 'ok')", in: {check: current.check}, out: ok}
+        - failing: {evaluate: "@in_ok == FALSE", in: {ok: ok.ok}}
+        - draft:   {solve: "json_get(@in_check, 'candidate')", on: failing.pass, in: {check: current.check}, out: text}
+        - error:   {solve: "json_get(@in_check, 'validation')", in: {check: current.check}, out: text}
+        - fix:     {generate: prompts.repair, in: {validation: error.text, skeleton: $loop.skeleton, candidate: draft.text}, out: yaml, label: Repair the model}
+        - again:
+            node: SOLVE
+            in: {candidate: fix.yaml, skeleton: $loop.skeleton, db: $loop.db}
+            ports: [trigger, complete, in_candidate, in_skeleton, in_db, out_check]
+            out: check
+            backend: subprocess
+            command: ["python3", "-I", "-m", "datagraf.tool", "draft_check"]
+            out_type: JSON
+            timeout: 300
+            label: Check the repair
+  - final:
+      on: repairs
+      node: SOLVE
+      in: {first: first.check, check: repairs.check}
+      ports: [trigger, complete, in_first, in_check, out_check]
+      out: check
+      backend: subprocess
+      command: ["python3", "-I", "-m", "datagraf.tool", "pick"]
+      out_type: JSON
+      timeout: 60
+  - valid:   {evaluate: "json_get(@in_check, 'ok') == TRUE", in: {check: final.check}}
+  - text:    {solve: "json_get(@in_check, 'candidate')", on: valid.pass, in: {check: final.check}, out: text}
+  - write:
+      node: SOLVE
+      in: {candidate: text.text, output_path: $in.output_path}
+      ports: [trigger, complete, in_candidate, in_output_path, out_written]
+      out: written
+      backend: subprocess
+      command: ["python3", "-I", "-m", "datagraf.tool", "write_model"]
+      out_type: JSON
+      timeout: 60
+      risky: true
+      label: Write the model
+  - path:    {solve: "json_get(@in_w, 'path')", in: {w: write.written}, out: path}
+  - verdict: {solve: "json_get(@in_check, 'validation')", on: path, in: {check: final.check}, out: text}
+  - done:    {output: {path: path.path, validation: verdict.text}}
+  - why:     {solve: "json_get(@in_check, 'validation')", on: valid.fail, in: {check: final.check}, out: text}
+  - invalid: {output: {path: why.text, validation: why.text}, on: why, exit: invalid}

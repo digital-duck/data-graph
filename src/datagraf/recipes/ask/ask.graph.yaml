@@ -1,0 +1,104 @@
+# ask: a question about a database with an Ossie semantic model -> the model narrowed by the graph (program: the datasets the
+# question names plus the join paths between them) -> SQL (model) -> a check (program: one read-only SELECT, every table and
+# column real, joins compared with the model's relationships, run read-only) -> up to max_repairs repairs while it fails
+# -> a report whose status a program decided: checked or failed. The database is opened read-only; nothing is written.
+version: "1.0-graph"
+workflow:
+  name: ask
+  description: Answers a question with SQL checked against the semantic model and the database. At most 1 + max_repairs model calls.
+  inputs:
+    - {name: question, type: TEXT}
+    - {name: model, type: TEXT, description: absolute path to the Ossie semantic model}
+    - {name: db, type: TEXT, description: absolute path to the SQLite database (opened read-only)}
+    - {name: scope, type: TEXT, default: graph, description: "graph: the datasets the question needs, by join paths; all: the whole model"}
+    - {name: row_limit, type: INTEGER, default: 20, description: rows shown in the report (the query itself is not limited)}
+    - {name: max_repairs, type: INTEGER, default: 2}
+  outputs:
+    - {name: sql, type: TEXT}
+    - {name: report, type: TEXT}
+    - {name: status, type: TEXT, description: checked or failed}
+    - {name: result, type: TEXT, description: "the last check as JSON: ok, error, columns, rows, row_count, uses, warnings"}
+resources:
+  prompts:
+    sql: ./prompts/sql.md
+    repair: ./prompts/repair.md
+steps:
+  - context:
+      node: SOLVE
+      in: {question: $in.question, model: $in.model, db: $in.db, scope: $in.scope}
+      ports: [trigger, complete, in_question, in_model, in_db, in_scope, out_context]
+      out: context
+      backend: subprocess
+      command: ["python3", "-I", "-m", "datagraf.tool", "ask_context"]
+      out_type: JSON
+      timeout: 60
+      label: Narrow the model to the question
+  - facts: {solve: "json_get(@in_c, 'text')", in: {c: context.context}, out: text}
+  - sql: {generate: prompts.sql, in: {question: $in.question, context: facts.text}, out: reply, label: Write the SQL}
+  - first:
+      node: SOLVE
+      in: {reply: sql.reply, model: $in.model, db: $in.db, row_limit: $in.row_limit}
+      ports: [trigger, complete, in_reply, in_model, in_db, in_row_limit, out_check]
+      out: check
+      backend: subprocess
+      command: ["python3", "-I", "-m", "datagraf.tool", "ask_check"]
+      out_type: JSON
+      timeout: 120
+      label: Check and run it
+  - repairs:
+      loop: "@in_max"
+      while: "NOT @ok"
+      index: round
+      in: {max: $in.max_repairs, first: first.check, question: $in.question, context: facts.text, model: $in.model, db: $in.db, row_limit: $in.row_limit}
+      state:
+        check: {from: [current.check, again.check], init: {}}
+        ok: {from: ok.ok, init: false}
+      steps:
+        - current:
+            node: SOLVE
+            in: {first: $loop.first, check: $loop.check}
+            ports: [trigger, complete, in_first, in_check, out_check]
+            out: check
+            backend: subprocess
+            command: ["python3", "-I", "-m", "datagraf.tool", "pick"]
+            out_type: JSON
+            timeout: 60
+        - ok:      {solve: "json_get(@in_check, 'ok')", in: {check: current.check}, out: ok}
+        - failing: {evaluate: "@in_ok == FALSE", in: {ok: ok.ok}}
+        - bad_sql: {solve: "json_get(@in_check, 'sql')", on: failing.pass, in: {check: current.check}, out: text}
+        - error:   {solve: "json_get(@in_check, 'error')", in: {check: current.check}, out: text}
+        - fix:     {generate: prompts.repair, in: {question: $loop.question, context: $loop.context, sql: bad_sql.text, error: error.text}, out: reply, label: Repair the SQL}
+        - again:
+            node: SOLVE
+            in: {reply: fix.reply, model: $loop.model, db: $loop.db, row_limit: $loop.row_limit}
+            ports: [trigger, complete, in_reply, in_model, in_db, in_row_limit, out_check]
+            out: check
+            backend: subprocess
+            command: ["python3", "-I", "-m", "datagraf.tool", "ask_check"]
+            out_type: JSON
+            timeout: 120
+            label: Check the repair
+  - final:
+      on: repairs
+      node: SOLVE
+      in: {first: first.check, check: repairs.check}
+      ports: [trigger, complete, in_first, in_check, out_check]
+      out: check
+      backend: subprocess
+      command: ["python3", "-I", "-m", "datagraf.tool", "pick"]
+      out_type: JSON
+      timeout: 60
+  - written:
+      node: SOLVE
+      in: {question: $in.question, check: final.check, max_repairs: $in.max_repairs}
+      ports: [trigger, complete, in_question, in_check, in_max_repairs, out_report]
+      out: report
+      backend: subprocess
+      command: ["python3", "-I", "-m", "datagraf.tool", "ask_report"]
+      out_type: JSON
+      timeout: 60
+      label: Write the report
+  - the_sql:  {solve: "json_get(@in_c, 'sql')", in: {c: final.check}, out: text}
+  - text:     {solve: "json_get(@in_r, 'text')", in: {r: written.report}, out: text}
+  - status:   {solve: "json_get(@in_r, 'status')", in: {r: written.report}, out: text}
+  - done:     {output: {sql: the_sql.text, report: text.text, status: status.text, result: final.check}}

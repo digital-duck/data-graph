@@ -62,7 +62,7 @@ Edges point from what is needed to what needs it (zinet's convention). `reads` g
 dataset → field, `derives` goes column → field, and `computes` goes field or metric → metric. Relationships are not
 dependencies: they are kept beside the graph as many-to-one joins, used for join-path checks and drawn as a separate edge kind.
 
-## Built in this prototype (0.1.0.dev0)
+## Built in this prototype (library in 0.1.0.dev0; recipes added in 0.1.0.dev1)
 
 | Command | What |
 |---|---|
@@ -73,12 +73,30 @@ dependencies: they are kept beside the graph as many-to-one joins, used for join
 | `dgr check MODEL` | gaps: unknown references, relationships to undeclared datasets or fields, a model-scoped metric over datasets with no join path, metrics without description, datasets with no relationship, SQL that does not parse |
 | `dgr export MODEL --format zinet\|json` | zinet `graph.yaml` (sources and columns are primitives, the rest concepts, the model an application), or the graph as JSON |
 | `dgr render MODEL --format html\|mermaid\|ascii\|svg\|png` | drawn through zinet (svg and png need Graphviz) |
-| `dgr draft --sqlite DB` | an Ossie skeleton from a SQLite catalogue, with no model: tables become datasets, columns fields (with `datatype`), the primary key, foreign keys become relationships. Descriptions and metrics are left for a person or the planned `ossie_draft` recipe |
+| `dgr draft --sqlite DB` | an Ossie skeleton from a SQLite catalogue, with no model: tables become datasets, columns fields (with `datatype`), the primary key, foreign keys become relationships. With `--enrich`, the `ossie_draft` recipe adds descriptions, synonyms and metrics (below) |
 | `dgr profile MODEL --sqlite DB` | read-only (`mode=ro`, `query_only`): rows per dataset; per field the non-null and distinct counts, min and max; each dataset-scoped metric evaluated over its dataset's fields, so a metric whose SQL does not run is found before anyone relies on it |
 
 Tested on the repository's three example models (`tpcds_semantic_model`, `flights`, `sap_business_partner`), the
 0.1.1 TPC-DS model, `examples/chinook.semantic_model.yaml` (drafted from data-copilot's Chinook database, then finished by
 hand), and a small `shop` model with its own SQLite database built by the tests: 44 tests.
+
+## Recipes (built 2026-11-22)
+
+Two GraphLang recipes in `src/datagraf/recipes/`, run through `datagraf.run.run_recipe` (a thin layer over
+`graphlang.recipes`, as in app-graph). Their deterministic steps are `datagraf.steps`, called as
+`python3 -I -m datagraf.tool STEP`.
+
+| Recipe | CLI | Steps |
+|---|---|---|
+| `ask` | `dgr ask MODEL "question" --sqlite DB` | 1. context (program): the datasets the question names, plus the join paths between them (`datagraf.ask.context`). 2. SQL (model). 3. check (program, `check_sql`): one read-only statement, real tables and columns (sqlglot against the database's catalogue), joins compared with the relationships, then run read-only. 4. up to `max_repairs` repairs with the check's message. 5. a report whose status, `checked` or `failed`, a program decides. Writes nothing. |
+| `ossie_draft` | `dgr draft --sqlite DB --enrich -o FILE` | 1. plan + Cedar GUARD (`policies/write.cedar`), before any model call: an absolute path under home or the temporary folder, the database exists, no overwrite unless asked. 2. skeleton and sample rows (program). 3. enrich (model): descriptions, `ai_context`, dimensions, metrics. 4. check (program, `datagraf.draft.check`): schema and model checks; datasets, sources, fields, expressions, keys and relationships unchanged; every dataset metric runs on the data. 5. repairs. 6. write (`risky: true`, behind the GUARD), or exit `invalid` (`E_MODEL_INVALID`) / `refused` (`E_WRITE_REFUSED`). |
+
+`dgr bench` runs `ask` over `benchmarks/chinook/questions.yaml`, the 24 data-copilot questions with a reference query
+each, and scores answers by running them (`datagraf.bench`). Results are in `benchmarks/chinook/README.md`:
+- **claude-sonnet-5-5:** 24/24 with the narrowed model, the whole model, or a model `ossie_draft` drafted in one call.
+- **llama3.2 3B:** 17/24 (twice) with the narrowed model, 13 and 16 with the whole model.
+
+They need graflang 0.3.0 (`graphlang.recipes`), on PyPI since 2026-11-22; `pyproject.toml` asks for `>=0.3.0,<0.4`.
 
 ## From data-copilot (2023)
 
@@ -96,7 +114,13 @@ benchmark across ten models. What carries over:
 
 ## Next
 
-1. **Recipes (GraphLang).**
+1. ~~**Recipes (GraphLang).**~~ Built; see "Recipes" above. Still to do on them:
+   - metric-aware SQL: have `ask` name the model's metrics, and check that a question about "revenue" uses the revenue
+     metric. The checks catch SQL that is wrong in form, not SQL that answers a different question; most small-model
+     misses are of that kind;
+   - a harder benchmark than Chinook (Spider or BIRD subsets): it can no longer separate frontier models;
+   - `dgr ask` over HTTP or in a UI (anadata's front ends) once the API binds safely.
+   The original plan for this step:
    - `ossie_draft`: fill in the skeleton's descriptions, synonyms and metrics from the data and the docs. It uses "draft, validate, repair", with `validate` as the check, as app-graph's `compile_blueprint` does.
    - `ask`: text to SQL that must cite metric and field ids, checked by a program. The SQL is compiled from the semantic layer and run read-only before it is shown. Benchmarked on Chinook against data-copilot.
 2. **Model-scoped metrics in `profile`.** Compile the joins from the relationships (many-to-one, from the fact outward), per `core-spec/relational_semantics.md`.

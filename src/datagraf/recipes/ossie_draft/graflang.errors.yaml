@@ -1,0 +1,10 @@
+# Error codes of ossie_draft.
+errors:
+  - code: E_MODEL_INVALID
+    description: the drafted semantic model still fails the checks after the repair attempts
+    cause: YAML that does not parse, a schema error, a changed dataset/field/key/relationship, or a metric that does not run
+    remedy: read the validation message; raise max_repairs, or start from `dgr draft --sqlite` and finish it by hand
+  - code: E_WRITE_REFUSED
+    description: the policy refused to write the model to this path
+    cause: the path is not absolute and under your home or the temporary folder, the database is missing, or the file exists
+    remedy: choose a new path under your home, or pass overwrite yes

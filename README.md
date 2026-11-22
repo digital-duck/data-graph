@@ -11,7 +11,7 @@ data-graph turns one into a graph and answers questions about it:
 - **drawing and export:** through [zinet](https://github.com/digital-duck/zinet).
 
 It is part of the digital-duck family: zinet for the graph format and drawing, dd-db for database access, [GraphLang](https://github.com/digital-duck/graflang)
-for the LLM steps (planned), beside app-graph, work-graph and concept-book. Prototype: version 0.1.0.dev0. See
+for the LLM steps (the `ask` and `ossie_draft` recipes), beside app-graph, work-graph and concept-book. Prototype: version 0.1.0.dev1. See
 [docs/DEV/plan.md](docs/DEV/plan.md) for the design and what comes next.
 
 ## Install
@@ -39,6 +39,22 @@ dgr render model.yaml -o lineage.html                       # or --format mermai
 dgr draft --sqlite shop.db -o shop.semantic_model.yaml      # a skeleton from a SQLite catalogue
 dgr profile model.yaml --sqlite shop.db                     # rows, nulls, distinct, ranges, metric values
 ```
+
+With a model (GraphLang recipes; `--llm ADAPTER[:MODEL]`, default `claude_cli`; `ollama:llama3.2` runs locally):
+
+```bash
+dgr draft --sqlite shop.db --enrich -o shop.semantic_model.yaml     # ossie_draft: the skeleton, then descriptions,
+                                                                    # synonyms and metrics, checked before it is written
+dgr ask model.yaml "top 5 customers by money spent" --sqlite shop.db   # ask: SQL checked against the model, run read-only
+dgr bench benchmarks/chinook/questions.yaml --sqlite chinook.sqlite3   # the 24 Chinook questions, scored by running them
+```
+
+`ask` shows the model only the datasets the question needs: the ones it names, plus the join paths between them (`--scope
+all` shows everything). Its SQL must be one read-only statement over real tables and columns, and it must run; a failure
+goes back to the model up to `--max-repairs` times, and a report says `CHECKED` or `FAILED` (a program decides which).
+`ossie_draft` may add descriptions, synonyms, dimensions and metrics, but not change what the catalogue says; every
+metric must run on the data, and the write sits behind a Cedar policy (an absolute path under your home or the temporary
+folder, never over an existing file unless asked). Results on Chinook are in [benchmarks/chinook](benchmarks/chinook/README.md).
 
 A name is a metric (`total_sales`), a dataset-scoped metric or field (`store_sales.total_quantity`), a dataset, or a node
 id (`column:tpcds.public.store_sales.ss_quantity`).

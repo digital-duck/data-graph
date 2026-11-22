@@ -1,4 +1,4 @@
-"""`dgr`: validate, explore, export and profile an Ossie semantic model.
+"""`dgr`: validate, explore, export and profile an Ossie semantic model; draft one and ask it questions (GraphLang recipes).
 
 Exit codes: 0 ok, 1 the model has errors (validate / check / profile), 2 a usage or load error.
 """
@@ -176,12 +176,40 @@ def render(model: Path, model_name: str | None, fmt: str, out: Path | None) -> N
         click.echo(data.decode("utf-8"))
 
 
+LLM = click.option("--llm", default=None, metavar="ADAPTER[:MODEL]",
+                   help="dd-llm adapter and model for the recipe, e.g. claude_cli:claude-sonnet-5-5 (default: claude_cli).")
+
+
+def _recipe(name: str, inputs: dict, llm: str | None, max_llm_calls: int):
+    from .run import DEFAULT_LLM, RecipeError, run_recipe
+    try:
+        return run_recipe(name, inputs, llm=llm or DEFAULT_LLM, max_llm_calls=max_llm_calls)
+    except RecipeError as e:
+        raise click.ClickException(f"recipe {name} stopped: {e}") from None
+
+
 @main.command()
 @click.option("--sqlite", "db", required=True, type=click.Path(exists=True, dir_okay=False, path_type=Path))
 @click.option("--name", default=None, help="Model name (default: the database file's stem).")
 @click.option("-o", "--out", type=click.Path(dir_okay=False, path_type=Path), help="Write here instead of stdout.")
-def draft(db: Path, name: str | None, out: Path | None) -> None:
-    """An Ossie skeleton from a SQLite catalogue: datasets, fields, keys, joins. No descriptions or metrics."""
+@LLM
+@click.option("--enrich", is_flag=True, help="Also have a model write descriptions, synonyms and metrics (the ossie_draft recipe; needs -o).")
+@click.option("--overwrite", is_flag=True, help="With --enrich: replace an existing file.")
+@click.option("--max-repairs", default=2, show_default=True)
+def draft(db: Path, name: str | None, out: Path | None, llm: str | None, enrich: bool, overwrite: bool, max_repairs: int) -> None:
+    """An Ossie model from a SQLite catalogue: datasets, fields, keys, joins. With --enrich (or --llm), a model adds
+    descriptions, synonyms and metrics, and a program checks them (structure unchanged, schema valid, every metric runs)."""
+    if enrich or llm:
+        if out is None:
+            raise click.UsageError("--enrich needs -o FILE")
+        run = _recipe("ossie_draft", {"db": str(db.resolve()), "output_path": str(out.resolve()), "name": name or "",
+                                      "overwrite": "yes" if overwrite else "no", "max_repairs": max_repairs}, llm, 1 + max_repairs)
+        click.echo(run.outputs.get("validation", ""))
+        if run.exit:
+            click.echo(f"not written ({run.exit}, {run.error_code}); {run.llm_calls} model call(s)", err=True)
+            sys.exit(1)
+        click.echo(f"wrote {run.outputs['path']} ({run.llm_calls} model call(s))")
+        return
     from .sqlite import draft as do_draft
     text = "# Drafted by data-graf (dgr) from a SQLite catalogue: add descriptions, ai_context and metrics.\n" + \
         yaml.safe_dump(do_draft(db, name), sort_keys=False, allow_unicode=True)
@@ -190,6 +218,74 @@ def draft(db: Path, name: str | None, out: Path | None) -> None:
         click.echo(f"wrote {out}")
     else:
         click.echo(text)
+
+
+@main.command()
+@MODEL
+@click.argument("question")
+@click.option("--sqlite", "db", required=True, type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@LLM
+@click.option("--scope", type=click.Choice(["graph", "all"]), default="graph", show_default=True,
+              help="graph: show the model only the datasets the question needs (by join paths); all: the whole model.")
+@click.option("--max-repairs", default=2, show_default=True)
+@click.option("--rows", "row_limit", default=20, show_default=True, help="Rows shown.")
+def ask(model: Path, question: str, db: Path, llm: str | None, scope: str, max_repairs: int, row_limit: int) -> None:
+    """Answer QUESTION with SQL that a program checked against the model and ran read-only (the ask recipe)."""
+    run = _recipe("ask", {"question": question, "model": str(model.resolve()), "db": str(db.resolve()), "scope": scope,
+                          "row_limit": row_limit, "max_repairs": max_repairs}, llm, 1 + max_repairs)
+    click.echo(run.outputs["report"])
+    click.echo(f"\n({run.llm_calls} model call(s))", err=True)
+    sys.exit(0 if run.outputs.get("status") == "checked" else 1)
+
+
+@main.command()
+@click.argument("questions", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option("--sqlite", "db", type=click.Path(exists=True, dir_okay=False, path_type=Path), help="Default: the file's `database`, beside it.")
+@click.option("--model", "model_path", type=click.Path(exists=True, dir_okay=False, path_type=Path), help="Default: the file's `model`.")
+@LLM
+@click.option("--scope", type=click.Choice(["graph", "all"]), default="graph", show_default=True)
+@click.option("--only", default="", help="Question ids, e.g. 1,4,17.")
+@click.option("--max-repairs", default=2, show_default=True)
+@click.option("-o", "--out", type=click.Path(dir_okay=False, path_type=Path), help="Write the results (JSON) here.")
+def bench(questions: Path, db: Path | None, model_path: Path | None, llm: str | None, scope: str, only: str, max_repairs: int,
+          out: Path | None) -> None:
+    """Run `ask` on every question of a benchmark file and score each answer by running it against reference queries."""
+    import json as _json
+    import time
+    from . import bench as B
+    from .sqlite import connect
+    doc = B.load_questions(questions)
+    db = db or (doc["_dir"] / doc["database"])
+    model_path = Path(model_path or (doc["_dir"] / doc["model"])).resolve()   # the recipe runs in its own folder
+    if not Path(db).is_file():
+        raise click.UsageError(f"no database at {db}; pass --sqlite")
+    _load(model_path, None)                                                    # a bad model stops here, not 24 times
+    conn = connect(db)
+    wanted = {int(x) for x in only.split(",") if x.strip()}
+    results = []
+    for q in doc["questions"]:
+        if wanted and q["id"] not in wanted:
+            continue
+        t0 = time.time()
+        try:
+            run = _recipe("ask", {"question": q["q"], "model": str(model_path), "db": str(Path(db).resolve()), "scope": scope,
+                                  "row_limit": 5, "max_repairs": max_repairs}, llm, 1 + max_repairs)
+            sql, status, calls = run.outputs.get("sql", ""), run.outputs.get("status", ""), run.llm_calls
+        except click.ClickException as e:
+            sql, status, calls = "", f"stopped: {e.message}", 0
+        s = B.score(q, sql, conn)
+        results.append({"id": q["id"], "question": q["q"], "passed": s["passed"], "status": status, "calls": calls,
+                        "seconds": round(time.time() - t0, 1), "rows": s["rows"], "error": s["error"], "sql": sql})
+        click.echo(f"{q['id']:>3} {'PASS' if s['passed'] else 'FAIL'}  {status:8} {calls} call(s) {results[-1]['seconds']:>5}s  {q['q'][:70]}")
+    n, ok = len(results), sum(r["passed"] for r in results)
+    calls = sum(r["calls"] for r in results)
+    click.echo(f"\n{ok}/{n} passed ({100 * ok / max(n, 1):.1f}%), {calls} model calls, scope {scope}, llm {llm or 'claude_cli'}")
+    if doc.get("baseline_2024"):
+        click.echo("2024 baseline (data-copilot, graded by hand): " + ", ".join(f"{k} {v}" for k, v in doc["baseline_2024"].items()))
+    if out:
+        out.write_text(_json.dumps({"questions": str(questions), "llm": llm or "claude_cli", "scope": scope, "passed": ok, "total": n,
+                                    "model_calls": calls, "results": results}, indent=2), encoding="utf-8")
+        click.echo(f"wrote {out}")
 
 
 @main.command()

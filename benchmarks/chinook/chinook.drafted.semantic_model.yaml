@@ -1,0 +1,782 @@
+# Drafted by data-graf (dgr) from a database catalogue; descriptions, ai_context and metrics written by a model
+# and checked by a program (schema, references, structure unchanged, every dataset metric runs). Review before use.
+version: "0.3.0.dev0"
+name: chinook_music_store
+description: Chinook is a digital music store. It records the catalogue (artists, albums, tracks, genres, media types, playlists), the customers and the employees who support them, and the sales (invoices and their line items).
+ai_context:
+  instructions: Revenue is the sum of invoice line values (UnitPrice * Quantity) on invoice_items, or equivalently invoices.Total; invoice_items is the sales fact table at track level and invoices is the fact table at order level. Dimensions such as genre, artist and album are reached by joining through tracks.
+datasets:
+- name: albums
+  source: albums
+  description: Music albums in the catalogue. Each album belongs to one artist and contains tracks.
+  ai_context:
+    synonyms:
+    - record
+    - LP
+    - release
+  fields:
+  - name: AlbumId
+    expression:
+      sql: AlbumId
+    datatype: Integer
+    description: Unique identifier of the album.
+  - name: Title
+    expression:
+      sql: Title
+    datatype: String
+    description: Title of the album.
+    dimension:
+      is_time: false
+    ai_context:
+      synonyms:
+      - album name
+      - album title
+  - name: ArtistId
+    expression:
+      sql: ArtistId
+    datatype: Integer
+    description: Identifier of the artist who made the album.
+  primary_key:
+  - AlbumId
+- name: artists
+  source: artists
+  description: Recording artists and bands whose albums are sold in the store.
+  ai_context:
+    synonyms:
+    - band
+    - performer
+    - musician
+  fields:
+  - name: ArtistId
+    expression:
+      sql: ArtistId
+    datatype: Integer
+    description: Unique identifier of the artist.
+  - name: Name
+    expression:
+      sql: Name
+    datatype: String
+    description: Name of the artist or band.
+    dimension:
+      is_time: false
+    ai_context:
+      synonyms:
+      - artist name
+      - band name
+  primary_key:
+  - ArtistId
+- name: customers
+  source: customers
+  description: People and companies who buy music from the store, with their contact details and assigned support representative.
+  ai_context:
+    synonyms:
+    - client
+    - buyer
+    - shopper
+  fields:
+  - name: CustomerId
+    expression:
+      sql: CustomerId
+    datatype: Integer
+    description: Unique identifier of the customer.
+  - name: FirstName
+    expression:
+      sql: FirstName
+    datatype: String
+    description: Customer's given name.
+    dimension:
+      is_time: false
+  - name: LastName
+    expression:
+      sql: LastName
+    datatype: String
+    description: Customer's family name.
+    dimension:
+      is_time: false
+  - name: Company
+    expression:
+      sql: Company
+    datatype: String
+    description: Company the customer works for, if any.
+    dimension:
+      is_time: false
+    ai_context:
+      synonyms:
+      - employer
+      - organization
+  - name: Address
+    expression:
+      sql: Address
+    datatype: String
+    description: Street address of the customer.
+  - name: City
+    expression:
+      sql: City
+    datatype: String
+    description: City where the customer lives.
+    dimension:
+      is_time: false
+  - name: State
+    expression:
+      sql: State
+    datatype: String
+    description: State or province of the customer; empty for countries without one.
+    dimension:
+      is_time: false
+    ai_context:
+      synonyms:
+      - province
+      - region
+  - name: Country
+    expression:
+      sql: Country
+    datatype: String
+    description: Country where the customer lives.
+    dimension:
+      is_time: false
+    ai_context:
+      synonyms:
+      - nation
+      - market
+  - name: PostalCode
+    expression:
+      sql: PostalCode
+    datatype: String
+    description: Postal or ZIP code of the customer.
+    ai_context:
+      synonyms:
+      - zip code
+      - zip
+  - name: Phone
+    expression:
+      sql: Phone
+    datatype: String
+    description: Customer's phone number.
+  - name: Fax
+    expression:
+      sql: Fax
+    datatype: String
+    description: Customer's fax number, often empty.
+  - name: Email
+    expression:
+      sql: Email
+    datatype: String
+    description: Customer's email address.
+  - name: SupportRepId
+    expression:
+      sql: SupportRepId
+    datatype: Integer
+    description: Employee who is the customer's support representative.
+    ai_context:
+      synonyms:
+      - sales rep
+      - account manager
+  primary_key:
+  - CustomerId
+- name: employees
+  source: employees
+  description: Staff of the store, including sales support agents who look after customers. ReportsTo forms the management hierarchy.
+  ai_context:
+    synonyms:
+    - staff
+    - worker
+    - support rep
+  fields:
+  - name: EmployeeId
+    expression:
+      sql: EmployeeId
+    datatype: Integer
+    description: Unique identifier of the employee.
+  - name: LastName
+    expression:
+      sql: LastName
+    datatype: String
+    description: Employee's family name.
+    dimension:
+      is_time: false
+  - name: FirstName
+    expression:
+      sql: FirstName
+    datatype: String
+    description: Employee's given name.
+    dimension:
+      is_time: false
+  - name: Title
+    expression:
+      sql: Title
+    datatype: String
+    description: Job title of the employee, such as Sales Manager or Sales Support Agent.
+    dimension:
+      is_time: false
+    ai_context:
+      synonyms:
+      - job title
+      - role
+      - position
+  - name: ReportsTo
+    expression:
+      sql: ReportsTo
+    datatype: Integer
+    description: EmployeeId of the employee's manager; empty for the top of the hierarchy.
+    ai_context:
+      synonyms:
+      - manager
+      - supervisor
+  - name: BirthDate
+    expression:
+      sql: BirthDate
+    datatype: DateTime
+    description: Employee's date of birth.
+    dimension:
+      is_time: true
+    ai_context:
+      synonyms:
+      - date of birth
+      - DOB
+  - name: HireDate
+    expression:
+      sql: HireDate
+    datatype: DateTime
+    description: Date the employee was hired.
+    dimension:
+      is_time: true
+    ai_context:
+      synonyms:
+      - start date
+      - date hired
+  - name: Address
+    expression:
+      sql: Address
+    datatype: String
+    description: Street address of the employee.
+  - name: City
+    expression:
+      sql: City
+    datatype: String
+    description: City where the employee is based.
+    dimension:
+      is_time: false
+  - name: State
+    expression:
+      sql: State
+    datatype: String
+    description: State or province where the employee is based.
+    dimension:
+      is_time: false
+    ai_context:
+      synonyms:
+      - province
+  - name: Country
+    expression:
+      sql: Country
+    datatype: String
+    description: Country where the employee is based.
+    dimension:
+      is_time: false
+  - name: PostalCode
+    expression:
+      sql: PostalCode
+    datatype: String
+    description: Postal code of the employee's address.
+    ai_context:
+      synonyms:
+      - zip code
+  - name: Phone
+    expression:
+      sql: Phone
+    datatype: String
+    description: Employee's phone number.
+  - name: Fax
+    expression:
+      sql: Fax
+    datatype: String
+    description: Employee's fax number.
+  - name: Email
+    expression:
+      sql: Email
+    datatype: String
+    description: Employee's work email address.
+  primary_key:
+  - EmployeeId
+- name: genres
+  source: genres
+  description: Musical genres used to classify tracks, such as Rock, Jazz and Metal.
+  ai_context:
+    synonyms:
+    - music style
+    - category
+  fields:
+  - name: GenreId
+    expression:
+      sql: GenreId
+    datatype: Integer
+    description: Unique identifier of the genre.
+  - name: Name
+    expression:
+      sql: Name
+    datatype: String
+    description: Name of the genre.
+    dimension:
+      is_time: false
+    ai_context:
+      synonyms:
+      - genre
+      - genre name
+      - style
+  primary_key:
+  - GenreId
+- name: invoice_items
+  source: invoice_items
+  description: Invoice line items. Each row is one track purchased on an invoice, with the price and quantity. This is the sales fact table at track level.
+  ai_context:
+    synonyms:
+    - sale line
+    - order line
+    - line item
+    - purchase
+  fields:
+  - name: InvoiceLineId
+    expression:
+      sql: InvoiceLineId
+    datatype: Integer
+    description: Unique identifier of the invoice line.
+  - name: InvoiceId
+    expression:
+      sql: InvoiceId
+    datatype: Integer
+    description: Invoice (order) this line belongs to.
+  - name: TrackId
+    expression:
+      sql: TrackId
+    datatype: Integer
+    description: Track that was purchased on this line.
+  - name: UnitPrice
+    expression:
+      sql: UnitPrice
+    datatype: Decimal
+    description: Price charged per unit of the track at the time of sale.
+    ai_context:
+      synonyms:
+      - price
+      - sale price
+  - name: Quantity
+    expression:
+      sql: Quantity
+    datatype: Integer
+    description: Number of units of the track purchased on this line.
+    ai_context:
+      synonyms:
+      - units
+      - qty
+      - units sold
+  primary_key:
+  - InvoiceLineId
+  metrics:
+  - name: line_revenue
+    expression:
+      sql: SUM(UnitPrice * Quantity)
+    datatype: Decimal
+    description: Total sales value of the track lines, calculated as unit price times quantity.
+    ai_context:
+      synonyms:
+      - revenue
+      - sales
+      - track sales
+  - name: units_sold
+    expression:
+      sql: SUM(Quantity)
+    datatype: Integer
+    description: Total number of tracks sold.
+    ai_context:
+      synonyms:
+      - tracks sold
+      - quantity sold
+      - volume
+  - name: invoice_line_count
+    expression:
+      sql: COUNT(InvoiceLineId)
+    datatype: Integer
+    description: Number of invoice lines.
+    ai_context:
+      synonyms:
+      - line count
+      - number of line items
+- name: invoices
+  source: invoices
+  description: Customer invoices. Each row is one order placed by a customer on a date, with the billing address and the invoice total. This is the sales fact table at order level.
+  ai_context:
+    synonyms:
+    - order
+    - sale
+    - purchase
+    - bill
+    - transaction
+  fields:
+  - name: InvoiceId
+    expression:
+      sql: InvoiceId
+    datatype: Integer
+    description: Unique identifier of the invoice.
+    ai_context:
+      synonyms:
+      - order id
+      - invoice number
+  - name: CustomerId
+    expression:
+      sql: CustomerId
+    datatype: Integer
+    description: Customer who was billed on the invoice.
+  - name: InvoiceDate
+    expression:
+      sql: InvoiceDate
+    datatype: DateTime
+    description: Date the invoice was issued.
+    dimension:
+      is_time: true
+    ai_context:
+      synonyms:
+      - order date
+      - sale date
+      - purchase date
+      - date
+  - name: BillingAddress
+    expression:
+      sql: BillingAddress
+    datatype: String
+    description: Street address the invoice was billed to.
+  - name: BillingCity
+    expression:
+      sql: BillingCity
+    datatype: String
+    description: City the invoice was billed to.
+    dimension:
+      is_time: false
+  - name: BillingState
+    expression:
+      sql: BillingState
+    datatype: String
+    description: State or province the invoice was billed to; often empty.
+    dimension:
+      is_time: false
+  - name: BillingCountry
+    expression:
+      sql: BillingCountry
+    datatype: String
+    description: Country the invoice was billed to.
+    dimension:
+      is_time: false
+    ai_context:
+      synonyms:
+      - country
+      - sales country
+      - market
+  - name: BillingPostalCode
+    expression:
+      sql: BillingPostalCode
+    datatype: String
+    description: Postal code the invoice was billed to.
+    ai_context:
+      synonyms:
+      - billing zip
+  - name: Total
+    expression:
+      sql: Total
+    datatype: Decimal
+    description: Total amount of the invoice, equal to the sum of its line values.
+    ai_context:
+      synonyms:
+      - invoice amount
+      - order total
+      - revenue
+      - sales amount
+  primary_key:
+  - InvoiceId
+  metrics:
+  - name: total_revenue
+    expression:
+      sql: SUM(Total)
+    datatype: Decimal
+    description: Total revenue, the sum of invoice totals.
+    ai_context:
+      synonyms:
+      - revenue
+      - sales
+      - total sales
+      - income
+  - name: invoice_count
+    expression:
+      sql: COUNT(InvoiceId)
+    datatype: Integer
+    description: Number of invoices issued.
+    ai_context:
+      synonyms:
+      - number of orders
+      - order count
+      - sales count
+  - name: average_invoice_value
+    expression:
+      sql: AVG(Total)
+    datatype: Decimal
+    description: Average invoice total.
+    ai_context:
+      synonyms:
+      - average order value
+      - AOV
+      - basket size
+- name: media_types
+  source: media_types
+  description: File formats in which tracks are sold, such as MPEG audio or protected AAC.
+  ai_context:
+    synonyms:
+    - format
+    - file type
+    - audio format
+  fields:
+  - name: MediaTypeId
+    expression:
+      sql: MediaTypeId
+    datatype: Integer
+    description: Unique identifier of the media type.
+  - name: Name
+    expression:
+      sql: Name
+    datatype: String
+    description: Name of the media type.
+    dimension:
+      is_time: false
+    ai_context:
+      synonyms:
+      - format
+      - media type
+      - file format
+  primary_key:
+  - MediaTypeId
+- name: playlist_track
+  source: playlist_track
+  description: Link table that assigns tracks to playlists; each row places one track on one playlist.
+  ai_context:
+    synonyms:
+    - playlist membership
+    - playlist entries
+  fields:
+  - name: PlaylistId
+    expression:
+      sql: PlaylistId
+    datatype: Integer
+    description: Playlist that contains the track.
+  - name: TrackId
+    expression:
+      sql: TrackId
+    datatype: Integer
+    description: Track that is on the playlist.
+  primary_key:
+  - PlaylistId
+  - TrackId
+- name: playlists
+  source: playlists
+  description: Named playlists that group tracks, such as Music, Movies and TV Shows.
+  ai_context:
+    synonyms:
+    - mix
+    - track list
+  fields:
+  - name: PlaylistId
+    expression:
+      sql: PlaylistId
+    datatype: Integer
+    description: Unique identifier of the playlist.
+  - name: Name
+    expression:
+      sql: Name
+    datatype: String
+    description: Name of the playlist.
+    dimension:
+      is_time: false
+    ai_context:
+      synonyms:
+      - playlist name
+  primary_key:
+  - PlaylistId
+- name: tracks
+  source: tracks
+  description: Individual songs or videos available for sale, with their album, genre, media type, length, file size and list price.
+  ai_context:
+    synonyms:
+    - song
+    - title
+    - music
+    - product
+  fields:
+  - name: TrackId
+    expression:
+      sql: TrackId
+    datatype: Integer
+    description: Unique identifier of the track.
+  - name: Name
+    expression:
+      sql: Name
+    datatype: String
+    description: Name of the track.
+    dimension:
+      is_time: false
+    ai_context:
+      synonyms:
+      - track name
+      - song name
+      - song title
+  - name: AlbumId
+    expression:
+      sql: AlbumId
+    datatype: Integer
+    description: Album the track appears on.
+  - name: MediaTypeId
+    expression:
+      sql: MediaTypeId
+    datatype: Integer
+    description: Media type (file format) of the track.
+  - name: GenreId
+    expression:
+      sql: GenreId
+    datatype: Integer
+    description: Genre of the track.
+  - name: Composer
+    expression:
+      sql: Composer
+    datatype: String
+    description: Composer or composers who wrote the track, as a comma-separated list; often empty.
+    dimension:
+      is_time: false
+    ai_context:
+      synonyms:
+      - songwriter
+      - writer
+      - author
+  - name: Milliseconds
+    expression:
+      sql: Milliseconds
+    datatype: Integer
+    description: Length of the track in milliseconds.
+    ai_context:
+      synonyms:
+      - duration
+      - length
+      - track length
+  - name: Bytes
+    expression:
+      sql: Bytes
+    datatype: Integer
+    description: File size of the track in bytes.
+    ai_context:
+      synonyms:
+      - file size
+      - size
+  - name: UnitPrice
+    expression:
+      sql: UnitPrice
+    datatype: Decimal
+    description: Current list price of the track.
+    ai_context:
+      synonyms:
+      - list price
+      - price
+  primary_key:
+  - TrackId
+  metrics:
+  - name: track_count
+    expression:
+      sql: COUNT(TrackId)
+    datatype: Integer
+    description: Number of tracks in the catalogue.
+    ai_context:
+      synonyms:
+      - number of songs
+      - catalogue size
+relationships:
+- name: albums_to_artists
+  from: albums
+  to: artists
+  from_columns:
+  - ArtistId
+  to_columns:
+  - ArtistId
+- name: customers_to_employees
+  from: customers
+  to: employees
+  from_columns:
+  - SupportRepId
+  to_columns:
+  - EmployeeId
+- name: employees_to_employees
+  from: employees
+  to: employees
+  from_columns:
+  - ReportsTo
+  to_columns:
+  - EmployeeId
+- name: invoice_items_to_tracks_TrackId
+  from: invoice_items
+  to: tracks
+  from_columns:
+  - TrackId
+  to_columns:
+  - TrackId
+- name: invoice_items_to_invoices_InvoiceId
+  from: invoice_items
+  to: invoices
+  from_columns:
+  - InvoiceId
+  to_columns:
+  - InvoiceId
+- name: invoices_to_customers
+  from: invoices
+  to: customers
+  from_columns:
+  - CustomerId
+  to_columns:
+  - CustomerId
+- name: playlist_track_to_tracks_TrackId
+  from: playlist_track
+  to: tracks
+  from_columns:
+  - TrackId
+  to_columns:
+  - TrackId
+- name: playlist_track_to_playlists_PlaylistId
+  from: playlist_track
+  to: playlists
+  from_columns:
+  - PlaylistId
+  to_columns:
+  - PlaylistId
+- name: tracks_to_media_types_MediaTypeId
+  from: tracks
+  to: media_types
+  from_columns:
+  - MediaTypeId
+  to_columns:
+  - MediaTypeId
+- name: tracks_to_genres_GenreId
+  from: tracks
+  to: genres
+  from_columns:
+  - GenreId
+  to_columns:
+  - GenreId
+- name: tracks_to_albums_AlbumId
+  from: tracks
+  to: albums
+  from_columns:
+  - AlbumId
+  to_columns:
+  - AlbumId
+metrics:
+- name: revenue_per_customer
+  expression:
+    sql: SUM(invoices.Total) / COUNT(DISTINCT customers.CustomerId)
+  datatype: Decimal
+  description: Average revenue per customer, total invoice amount divided by the number of distinct customers.
+  ai_context:
+    synonyms:
+    - average customer value
+    - customer lifetime value
+    - ARPU

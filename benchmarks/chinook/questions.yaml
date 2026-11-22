@@ -1,0 +1,116 @@
+# The 24 Chinook questions data-copilot was scored on (2024), with a reference query for each, so `dgr bench` can score
+# an answer by running it instead of by eye.
+#
+# Source: py4kids/lesson-18-ai/vanna/docs/LLM-evaluations-6.xlsx, sheet "Question-results" (questions verbatim, whitespace
+# collapsed). That sheet graded pass/fail by hand; its success rates are kept below as the baseline.
+#
+# How an answer is scored (datagraf.bench):
+#   rows      (default) the same number of rows, and every column of the reference matches some column of the answer
+#             as a multiset (numbers rounded to 2 places; a text value also matches a longer one containing it, so
+#             "Adams" matches "Andrew Adams"). Extra columns in the answer are fine; so is any row order.
+#   superset  every value of each reference column appears in some column of the answer (row counts may differ).
+#   within    some column of the answer holds only values of the reference column: for "the customer with the most ...",
+#             where several customers tie, any of them (or all of them) is right.
+#   mentions  the answer's SQL names every word listed (for questions about the schema itself).
+# A reference keeps only the columns that are not ambiguous. Where a ranking has ties (many tracks cost 1.99, several
+# customers have 7 invoices), it holds the ranked values, not the names, so any tie-break passes.
+# `gold:` may be a list: the answer passes if it matches any one of them (for questions with two fair readings).
+database: chinook.sqlite3        # data-copilot/src/store/sql/sqlite/chinook/chinook.sqlite3 (also anadata/data/chinook.db)
+model: ../../examples/chinook.semantic_model.yaml
+
+baseline_2024:                   # success rate (%) per model, as recorded in the sheet; models without a figure are left out
+  gpt-4: 100
+  gpt-4o-mini: 95.8
+  gpt-3.5-turbo: 100
+  claude-3-sonnet: 95.8
+  gemini-1.5-pro: 95.8
+  qwen2.5-coder-7b: 100
+  qwen2.5-7b: 91.7
+  qwen2.5-1.5b: 91.7
+  llama3.1-8b: 79.2
+  llama3-8b: 100
+  gemma2-7b: 100
+  mistral-nemo: 95.8
+  codegeex4-9b: 100
+
+questions:
+  - id: 1
+    q: Can you list all tables in the SQLite database catalog?
+    gold: {check: superset, sql: "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"}
+  - id: 2
+    q: which table stores customer's orders
+    gold: {check: mentions, words: [invoices]}
+  - id: 3
+    q: How many customers are there
+    gold: {sql: "SELECT COUNT(*) FROM customers"}
+  - id: 4
+    q: what are the top 5 countries that customers come from?
+    gold: {sql: "SELECT Country FROM customers GROUP BY Country ORDER BY COUNT(*) DESC, Country LIMIT 5"}
+  - id: 5
+    q: List all albums and their corresponding artist names
+    gold: {sql: "SELECT al.Title, ar.Name FROM albums al JOIN artists ar ON ar.ArtistId = al.ArtistId"}
+  - id: 6
+    q: Find all tracks with a name containing "What" (case-insensitive)
+    gold: {sql: "SELECT Name FROM tracks WHERE Name LIKE '%what%'"}
+  - id: 7
+    q: Get the total number of invoices for each customer
+    gold: {sql: "SELECT COUNT(*) FROM invoices GROUP BY CustomerId"}
+  - id: 8
+    q: 'Find the total number of invoices per country:'
+    gold: {sql: "SELECT BillingCountry, COUNT(*) FROM invoices GROUP BY BillingCountry"}
+  - id: 9
+    q: 'List all invoices with a total exceeding $10:'
+    gold: {sql: "SELECT InvoiceId, Total FROM invoices WHERE Total > 10"}
+  - id: 10
+    q: 'Find all invoices since 2010 and the total amount invoiced:'
+    gold:                        # two fair readings: the invoices themselves, or the one total
+      - {sql: "SELECT InvoiceId FROM invoices WHERE InvoiceDate >= '2010-01-01'"}
+      - {check: superset, sql: "SELECT SUM(Total) FROM invoices WHERE InvoiceDate >= '2010-01-01'"}
+  - id: 11
+    q: List all employees and their reporting manager's name (if any)
+    gold: {sql: "SELECT e.LastName, m.LastName FROM employees e LEFT JOIN employees m ON m.EmployeeId = e.ReportsTo"}
+  - id: 12
+    q: Get the average invoice total for each customer
+    gold: {sql: "SELECT AVG(Total) FROM invoices GROUP BY CustomerId"}
+  - id: 13
+    q: Find the top 5 most expensive tracks (based on unit price)
+    gold: {sql: "SELECT UnitPrice FROM tracks ORDER BY UnitPrice DESC LIMIT 5"}
+  - id: 14
+    q: 'List all genres and the number of tracks in each genre:'
+    gold: {sql: "SELECT g.Name, COUNT(t.TrackId) FROM genres g LEFT JOIN tracks t ON t.GenreId = g.GenreId GROUP BY g.GenreId"}
+  - id: 15
+    q: 'Get all genres that do not have any tracks associated with them:'
+    gold: {sql: "SELECT g.Name FROM genres g LEFT JOIN tracks t ON t.GenreId = g.GenreId WHERE t.TrackId IS NULL"}
+  - id: 16
+    q: 'List all customers who have not placed any orders:'
+    gold: {sql: "SELECT c.CustomerId FROM customers c LEFT JOIN invoices i ON i.CustomerId = c.CustomerId WHERE i.InvoiceId IS NULL"}
+  - id: 17
+    q: 'There are 3 tables: artists, albums and tracks, where albums and artists are linked by ArtistId, albums and tracks are linked by AlbumId, Can you find the top 10 most popular artists based on the number of tracks'
+    gold: {sql: "SELECT COUNT(*) n FROM tracks t JOIN albums al ON al.AlbumId = t.AlbumId GROUP BY al.ArtistId ORDER BY n DESC LIMIT 10"}
+  - id: 18
+    q: 'List all customers from Canada and their email addresses:'
+    gold: {sql: "SELECT Email FROM customers WHERE Country = 'Canada'"}
+  - id: 19
+    q: Find the customer with the most invoices
+    gold:                        # the top count, or any of the customers tied for it
+      - {check: superset, sql: "SELECT COUNT(*) n FROM invoices GROUP BY CustomerId ORDER BY n DESC LIMIT 1"}
+      - {check: within, sql: "SELECT c.LastName FROM customers c JOIN invoices i ON i.CustomerId = c.CustomerId GROUP BY c.CustomerId HAVING COUNT(*) = (SELECT MAX(n) FROM (SELECT COUNT(*) n FROM invoices GROUP BY CustomerId))"}
+  - id: 20
+    q: Find the customer who bought the most albums in total quantity (across all invoices)
+    gold:                        # the top quantity, or any of the customers tied for it
+      - {check: superset, sql: "SELECT SUM(ii.Quantity) q FROM invoice_items ii JOIN invoices i ON i.InvoiceId = ii.InvoiceId GROUP BY i.CustomerId ORDER BY q DESC LIMIT 1"}
+      - {check: within, sql: "SELECT c.LastName FROM customers c JOIN invoices i ON i.CustomerId = c.CustomerId JOIN invoice_items ii ON ii.InvoiceId = i.InvoiceId GROUP BY c.CustomerId HAVING SUM(ii.Quantity) = (SELECT MAX(q) FROM (SELECT SUM(ii.Quantity) q FROM invoice_items ii JOIN invoices i ON i.InvoiceId = ii.InvoiceId GROUP BY i.CustomerId))"}
+  - id: 21
+    q: 'Hint: album quantity is found in invoice_items, Find the top 5 customers who bought the most albums in total quantity (across all invoices):'
+    gold: {sql: "SELECT SUM(ii.Quantity) q FROM invoice_items ii JOIN invoices i ON i.InvoiceId = ii.InvoiceId GROUP BY i.CustomerId ORDER BY q DESC LIMIT 5"}
+  - id: 22
+    q: 'Find the top 5 customers who spent the most money overall, Hint: order total can be found on invoices table, calculation using invoice_items detail table is unnecessary'
+    gold: {sql: "SELECT SUM(Total) s FROM invoices GROUP BY CustomerId ORDER BY s DESC LIMIT 5"}
+  - id: 23
+    q: 'Get all playlists containing at least 10 tracks and the total duration of those tracks:'
+    gold: {sql: "SELECT p.Name FROM playlists p JOIN playlist_track pt ON pt.PlaylistId = p.PlaylistId GROUP BY p.PlaylistId HAVING COUNT(*) >= 10"}
+  - id: 24
+    q: 'Identify artists who have albums with tracks appearing in multiple genres:'
+    gold:                        # per artist (across their albums), or per album
+      - {sql: "SELECT ar.Name FROM artists ar JOIN albums al ON al.ArtistId = ar.ArtistId JOIN tracks t ON t.AlbumId = al.AlbumId GROUP BY ar.ArtistId HAVING COUNT(DISTINCT t.GenreId) > 1"}
+      - {check: superset, sql: "SELECT DISTINCT ar.Name FROM artists ar JOIN albums al ON al.ArtistId = ar.ArtistId JOIN tracks t ON t.AlbumId = al.AlbumId GROUP BY al.AlbumId HAVING COUNT(DISTINCT t.GenreId) > 1"}

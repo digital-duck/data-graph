@@ -135,4 +135,4 @@ These are exact answers, from a program, before any model is asked. The graph is
 **Where each stands.**
 - **data-copilot** is the record of the idea and its benchmark.
 - **anadata** is the clean dd-* engine. Its configuration, prompts and front ends are worth reusing, and its retrieval code is the part data-graph replaces with the graph.
-- **data-graph** is the version where the knowledge is a checked, shareable model, and the LLM drafts and asks inside guard rails. Next steps are in [plan.md](plan.md): the recipes, multi-dataset profiling, connectors and importers.
+- **data-graph** is the version where the knowledge is a checked, shareable model, and the LLM drafts and asks inside guard rails. Next steps are in [plan.md](plan.md): the recipes, multi-dataset profiling, connectors and importers. The two recipes are built (2026-11-22): on the same 24 Chinook questions, scored by running them, claude-sonnet-5-5 answers 24/24 and a local llama3.2 3B 17/24 with the graph-narrowed model (`benchmarks/chinook/README.md`).

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "data-graf"
-version = "0.1.0.dev0"
+version = "0.1.0.dev1"
 description = "Lineage, checks and profiling for semantic layers written in Apache Ossie"
 readme = "README.md"
 license = "Apache-2.0"
@@ -17,7 +17,12 @@ dependencies = [
     "click>=8.1",
     "zinet>=0.2.2",
     "dd-db>=0.1.3",              # database access (read-only SQLite; DuckDB, Postgres, Snowflake, ... adapters)
+    "graflang>=0.3.0,<0.4",      # the ask and ossie_draft recipes run on GraphLang (package `graphlang`); models through dd-llm
 ]
+
+[project.urls]
+Homepage = "https://github.com/digital-duck/data-graph"
+Repository = "https://github.com/digital-duck/data-graph"
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
