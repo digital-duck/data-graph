@@ -80,7 +80,7 @@ It has three front ends over one engine: a Streamlit UI (five pages), a click CL
   - `SQLiteDB.run_query` commits anything that is not `SELECT`/`WITH`/`PRAGMA`.
   - The `/run` endpoint runs any SQL it is sent.
   - `anadata-api` binds to `0.0.0.0` by default, so anyone on the network who can reach port 8000 could change the database.
-  - **Fixed 2026-11-22:** anadata now uses dd-db's `SQLiteDB(read_only=True)` (new in dd-db 0.1.3), with `database.read_only` defaulting to `true`, and its own copy of the SQLite class is gone. Its DDL now includes `FOREIGN KEY` lines, which helps the model with joins. Still open: binding the API to `127.0.0.1`, and read-only for Postgres in dd-db.
+  - **Fixed 2026-11-22:** anadata now uses dd-db's `SQLiteDB(read_only=True)` (new in dd-db 0.1.3), with `database.read_only` defaulting to `true`, and its own copy of the SQLite class is gone. Its DDL now includes `FOREIGN KEY` lines, which helps the model with joins. The API (`anadata-api`, `anadata serve`) now binds to `127.0.0.1` by default; `--host 0.0.0.0` serves the network on purpose. Still open: read-only for Postgres in dd-db.
 - **`exec` of model-written Plotly code**, in the app's own process.
 - **Validity is still "it parses"** (`sqlparse`). Nothing checks that the tables and columns exist, that the joins follow the foreign keys, or that "revenue" means what the business means by revenue.
 - **The knowledge is still opaque text in a vector store.** DDL strings, documentation strings and example pairs carry no structure. There are no metrics, no join paths and no lineage, and nothing can say which example breaks when a column changes.
