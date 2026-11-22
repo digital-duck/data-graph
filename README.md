@@ -17,22 +17,27 @@ for the LLM steps (planned), beside app-graph, work-graph and concept-book. Prot
 ## Install
 
 ```bash
-pip install -e ".[dev]"     # Python 3.11+; registers `datagraph` (alias `dg`)
+pip install data-graf       # once published; Python 3.11+
+pip install -e ".[dev]"     # from source; registers `dgr`
 pytest
 ```
+
+Names: the repository is `data-graph`; the PyPI package is `data-graf`, the import is `datagraf` and the command is `dgr`.
+`datagraph` is already the import and command name of an unrelated package on PyPI (`datagraph-core`), and "graf"
+matches GraphLang's `graf`.
 
 ## Use
 
 ```bash
-datagraph validate model.yaml              # JSON Schema for its Ossie version, then references and gaps (exit 1 on an error)
-datagraph show model.yaml                  # datasets, fields, metrics, joins
-datagraph lineage model.yaml total_sales   # upstream, to source columns
-datagraph impact model.yaml store_sales.ss_ext_sales_price   # downstream: the metrics it feeds
-datagraph check model.yaml                 # references and gaps, without the schema
-datagraph export model.yaml --format zinet -o lineage.graph.yaml   # or --format json
-datagraph render model.yaml -o lineage.html                       # or --format mermaid / ascii / svg / png
-datagraph draft --sqlite shop.db -o shop.semantic_model.yaml      # a skeleton from a SQLite catalogue
-datagraph profile model.yaml --sqlite shop.db                     # rows, nulls, distinct, ranges, metric values
+dgr validate model.yaml              # JSON Schema for its Ossie version, then references and gaps (exit 1 on an error)
+dgr show model.yaml                  # datasets, fields, metrics, joins
+dgr lineage model.yaml total_sales   # upstream, to source columns
+dgr impact model.yaml store_sales.ss_ext_sales_price   # downstream: the metrics it feeds
+dgr check model.yaml                 # references and gaps, without the schema
+dgr export model.yaml --format zinet -o lineage.graph.yaml   # or --format json
+dgr render model.yaml -o lineage.html                       # or --format mermaid / ascii / svg / png
+dgr draft --sqlite shop.db -o shop.semantic_model.yaml      # a skeleton from a SQLite catalogue
+dgr profile model.yaml --sqlite shop.db                     # rows, nulls, distinct, ranges, metric values
 ```
 
 A name is a metric (`total_sales`), a dataset-scoped metric or field (`store_sales.total_quantity`), a dataset, or a node
@@ -42,13 +47,13 @@ Both Ossie shapes are read: the released 0.1.1 (`semantic_model:` list, `dialect
 (one model at the root, `sql` expressions). Each is checked against its own bundled schema.
 
 `examples/chinook.semantic_model.yaml` is the Chinook sample database (the one
-[data-copilot](https://github.com/digital-duck/data-copilot) used) as a finished model: drafted with `datagraph draft`,
+[data-copilot](https://github.com/digital-duck/data-copilot) used) as a finished model: drafted with `dgr draft`,
 then given descriptions, synonyms and metrics by hand.
 
 ## From Python
 
 ```python
-import datagraph as dg
+import datagraf as dg
 
 model = dg.load("tpcds_semantic_model.yaml")
 G = dg.build(model)                                   # networkx DiGraph: source -> column -> field -> metric
@@ -58,5 +63,5 @@ problems = dg.model_problems(model, G)
 
 ## License
 
-Apache-2.0. The Ossie schemas in `src/datagraph/schemas/` and the example models in `tests/fixtures/` come from
+Apache-2.0. The Ossie schemas in `src/datagraf/schemas/` and the example models in `tests/fixtures/` come from
 [apache/ossie](https://github.com/apache/ossie), also Apache-2.0; see [NOTICE](NOTICE).

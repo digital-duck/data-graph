@@ -35,7 +35,7 @@ Checked against the repository (`github.com/apache/ossie`, main at `d4dca4e9f81c
 | field type | none | `datatype` (String, Integer, Decimal, Float, Boolean, Date, Time, DateTime, DateTimeTz, Opaque) |
 | schema | `core-spec/osi-schema.json` | `core-spec/ossie-schema.json` |
 
-Both are read; both schemas ship in `datagraph/schemas/` (Apache-2.0, see `NOTICE`). An expression's text is `sql`, else
+Both are read; both schemas ship in `datagraf/schemas/` (Apache-2.0, see `NOTICE`). An expression's text is `sql`, else
 the `OSSIE_SQL_2026` or `ANSI_SQL` entry of `dialects`, else nothing: a model in another dialect is opaque, and its
 lineage cannot be read from SQL.
 
@@ -66,15 +66,15 @@ dependencies: they are kept beside the graph as many-to-one joins, used for join
 
 | Command | What |
 |---|---|
-| `datagraph validate MODEL` | the JSON Schema for the document's version, then the reference checks below; exit 1 on an error |
-| `datagraph show MODEL` | datasets, fields, metrics and joins, counted and listed |
-| `datagraph lineage MODEL NAME` | what a metric or field is made of, down to source columns |
-| `datagraph impact MODEL NAME` | what depends on a column, field or dataset |
-| `datagraph check MODEL` | gaps: unknown references, relationships to undeclared datasets or fields, a model-scoped metric over datasets with no join path, metrics without description, datasets with no relationship, SQL that does not parse |
-| `datagraph export MODEL --format zinet\|json` | zinet `graph.yaml` (sources and columns are primitives, the rest concepts, the model an application), or the graph as JSON |
-| `datagraph render MODEL --format html\|mermaid\|ascii\|svg\|png` | drawn through zinet (svg and png need Graphviz) |
-| `datagraph draft --sqlite DB` | an Ossie skeleton from a SQLite catalogue, with no model: tables become datasets, columns fields (with `datatype`), the primary key, foreign keys become relationships. Descriptions and metrics are left for a person or the planned `ossie_draft` recipe |
-| `datagraph profile MODEL --sqlite DB` | read-only (`mode=ro`, `query_only`): rows per dataset; per field the non-null and distinct counts, min and max; each dataset-scoped metric evaluated over its dataset's fields, so a metric whose SQL does not run is found before anyone relies on it |
+| `dgr validate MODEL` | the JSON Schema for the document's version, then the reference checks below; exit 1 on an error |
+| `dgr show MODEL` | datasets, fields, metrics and joins, counted and listed |
+| `dgr lineage MODEL NAME` | what a metric or field is made of, down to source columns |
+| `dgr impact MODEL NAME` | what depends on a column, field or dataset |
+| `dgr check MODEL` | gaps: unknown references, relationships to undeclared datasets or fields, a model-scoped metric over datasets with no join path, metrics without description, datasets with no relationship, SQL that does not parse |
+| `dgr export MODEL --format zinet\|json` | zinet `graph.yaml` (sources and columns are primitives, the rest concepts, the model an application), or the graph as JSON |
+| `dgr render MODEL --format html\|mermaid\|ascii\|svg\|png` | drawn through zinet (svg and png need Graphviz) |
+| `dgr draft --sqlite DB` | an Ossie skeleton from a SQLite catalogue, with no model: tables become datasets, columns fields (with `datatype`), the primary key, foreign keys become relationships. Descriptions and metrics are left for a person or the planned `ossie_draft` recipe |
+| `dgr profile MODEL --sqlite DB` | read-only (`mode=ro`, `query_only`): rows per dataset; per field the non-null and distinct counts, min and max; each dataset-scoped metric evaluated over its dataset's fields, so a metric whose SQL does not run is found before anyone relies on it |
 
 Tested on the repository's three example models (`tpcds_semantic_model`, `flights`, `sap_business_partner`), the
 0.1.1 TPC-DS model, `examples/chinook.semantic_model.yaml` (drafted from data-copilot's Chinook database, then finished by
@@ -89,7 +89,7 @@ benchmark across ten models. What carries over:
 | data-copilot | data-graph |
 |---|---|
 | knowledge base: DDL, documentation, question/SQL pairs, in ChromaDB | the Ossie model: datasets and fields (the DDL), `description`, `ai_context.examples` (question/SQL pairs). A standard file instead of a private vector store |
-| business terms (`bus_term`: term, description, related tables, related columns) | Ossie `metrics` and `ai_context.synonyms`: the semantic layer is the standard home for business terms (planned: `datagraph import-terms bus_term.csv`) |
+| business terms (`bus_term`: term, description, related tables, related columns) | Ossie `metrics` and `ai_context.synonyms`: the semantic layer is the standard home for business terms (planned: `datagraf import-terms bus_term.csv`) |
 | import CSV / XLSX / SQLite into a database | `draft --sqlite` (built); CSV import is next |
 | the Chinook database and its 24 questions | the benchmark for the planned text-to-SQL recipe, which can then be compared with vanna's RAG on the same questions |
 | LLM-generated SQL run as is (`is_sql_valid` only parses) | SQL checked against the model's metric and field ids, then run read-only, then shown |
@@ -104,5 +104,5 @@ benchmark across ten models. What carries over:
    already use only `BaseDB` methods. Each adapter needs a read-only mode first (dd-db 0.1.3 added it for SQLite; DuckDB has
    one), and `TableSchema.foreign_keys` filled in. Connection settings through dd-config.
 4. **Importers.** `bus_term.csv`, a dbt project (models and the MetricFlow semantic models, which Ossie already converts), and CSV files.
-5. **work-graph's `data` area.** The pack plus an `ossie` processor that calls `datagraph.load` and `datagraph.lineage`.
+5. **work-graph's `data` area.** The pack plus an `ossie` processor that calls `datagraf.load` and `datagraf.lineage`.
 6. **Ossie's ontology documents** (`*.ontology.yaml`, `*.mapping.yaml`), after the spec settles.

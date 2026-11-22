@@ -9,12 +9,12 @@ import yaml
 from click.testing import CliRunner
 from zinet import to_yaml, validate as zvalidate
 
-import datagraph as dg
-from datagraph import checks as C
-from datagraph.cli import main
-from datagraph.export import to_json, to_zinet
-from datagraph.model import read_document
-from datagraph.sqlite import connect, draft, ossie_type, profile
+import datagraf as dg
+from datagraf import checks as C
+from datagraf.cli import main
+from datagraf.export import to_json, to_zinet
+from datagraf.model import read_document
+from datagraf.sqlite import connect, draft, ossie_type, profile
 
 from conftest import CHINOOK, OSSIE_EXAMPLES, SHOP_MODEL, TPCDS, TPCDS_011, write_yaml
 

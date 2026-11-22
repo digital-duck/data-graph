@@ -113,7 +113,7 @@ These are exact answers, from a program, before any model is asked. The graph is
 **3. The model's SQL can now be checked, not trusted.** The stack has grown the pieces both apps lacked:
 - **GraphLang** runs LLM steps as recipes, with a call meter, checkpoints, and "draft, validate, repair" loops (app-graph's `compile_blueprint`). It also puts Cedar guards before risky steps, and runs commands in containers.
 - **The semantic model is the validator.** Generated SQL must name real metrics and fields, and join along declared relationships.
-- **Databases are opened read-only**, by construction. `datagraph profile` already runs each metric's SQL against the data, so a metric that doesn't run is found before anyone relies on it. On Chinook, the two ways of computing revenue agree (2328.6 each).
+- **Databases are opened read-only**, by construction. `dgr profile` already runs each metric's SQL against the data, so a metric that doesn't run is found before anyone relies on it. On Chinook, the two ways of computing revenue agree (2328.6 each).
 
 **What carries forward.**
 - The **Chinook database and the 24-question benchmark**, so a data-graph text-to-SQL recipe can be scored against data-copilot's and anadata's numbers on the same questions.

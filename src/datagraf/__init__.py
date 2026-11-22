@@ -1,6 +1,6 @@
 """data-graph: lineage, checks and profiling for semantic layers written in Apache Ossie.
 
-    import datagraph as dg
+    import datagraf as dg
     model = dg.load("tpcds_semantic_model.yaml")
     G = dg.build(model)                       # networkx DiGraph: source -> column -> field -> metric
     dg.upstream(G, dg.resolve(G, "customer_lifetime_value"))

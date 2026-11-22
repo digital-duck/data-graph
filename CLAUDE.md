@@ -7,10 +7,10 @@ data-graph: lineage, checks and profiling for Apache Ossie semantic models. Plan
 ```bash
 pip install -e ".[dev]"
 pytest                      # 44 tests; no network, no LLM; builds its own SQLite database
-datagraph validate tests/fixtures/ossie/tpcds_semantic_model.yaml
+dgr validate tests/fixtures/ossie/tpcds_semantic_model.yaml
 ```
 
-## Layout (`src/datagraph/`)
+## Layout (`src/datagraf/`)
 
 - `model.py`: reads 0.1.x (`semantic_model:` list, `dialects`) and 0.3.x (root model, `sql`) into dataclasses.
 - `lineage.py`: `build()` makes a networkx DiGraph with ids `source:`, `column:`, `dataset:`, `field:`, `metric:`.
@@ -20,7 +20,7 @@ datagraph validate tests/fixtures/ossie/tpcds_semantic_model.yaml
 - `export.py`: zinet `graph.yaml` (sources and columns are primitives, the model is the one application), or JSON.
 - `sqlite.py`: `draft()` from a catalogue, `profile()` of the data, through dd-db (`SQLiteDB(path, read_only=True)`,
   i.e. `mode=ro` + `PRAGMA query_only`). Uses only `BaseDB` methods, so other dd-db adapters can follow.
-- `cli.py`: the `datagraph` / `dg` click group. Exit 0 ok, 1 model errors, 2 usage.
+- `cli.py`: the `dgr` click group. Exit 0 ok, 1 model errors, 2 usage.
 
 ## Rules
 

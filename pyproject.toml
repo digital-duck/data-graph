@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "data-graph"
+name = "data-graf"
 version = "0.1.0.dev0"
 description = "Lineage, checks and profiling for semantic layers written in Apache Ossie"
 readme = "README.md"
@@ -23,11 +23,10 @@ dependencies = [
 dev = ["pytest>=8"]
 
 [project.scripts]
-datagraph = "datagraph.cli:main"
-dg = "datagraph.cli:main"
+dgr = "datagraf.cli:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/datagraph"]
+packages = ["src/datagraf"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

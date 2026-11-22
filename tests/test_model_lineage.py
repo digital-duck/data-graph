@@ -4,8 +4,8 @@ import copy
 
 import pytest
 
-import datagraph as dg
-from datagraph.model import expression_sql
+import datagraf as dg
+from datagraf.model import expression_sql
 
 from conftest import OSSIE_EXAMPLES, SHOP_MODEL, TPCDS, TPCDS_011, write_yaml
 

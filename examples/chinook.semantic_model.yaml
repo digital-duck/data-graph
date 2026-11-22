@@ -1,6 +1,6 @@
 # Chinook (the sample database data-copilot used in 2023) as an Ossie semantic model.
-# Drafted with `datagraph draft --sqlite chinook.sqlite3`, then finished by hand: descriptions, synonyms, metrics.
-# yaml-language-server: $schema=../src/datagraph/schemas/ossie-0.3.0.dev0.schema.json
+# Drafted with `dgr draft --sqlite chinook.sqlite3`, then finished by hand: descriptions, synonyms, metrics.
+# yaml-language-server: $schema=../src/datagraf/schemas/ossie-0.3.0.dev0.schema.json
 version: 0.3.0.dev0
 name: chinook_music_store
 datasets:

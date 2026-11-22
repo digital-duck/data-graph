@@ -1,4 +1,4 @@
-"""`datagraph` (alias `dg`): validate, explore, export and profile an Ossie semantic model.
+"""`dgr`: validate, explore, export and profile an Ossie semantic model.
 
 Exit codes: 0 ok, 1 the model has errors (validate / check / profile), 2 a usage or load error.
 """
@@ -35,7 +35,7 @@ def _print_problems(problems: list[dict]) -> None:
 
 
 @click.group()
-@click.version_option(__version__, prog_name="datagraph")
+@click.version_option(__version__, prog_name="dgr")
 def main() -> None:
     """Lineage, checks and profiling for Apache Ossie semantic models."""
 
@@ -183,7 +183,7 @@ def render(model: Path, model_name: str | None, fmt: str, out: Path | None) -> N
 def draft(db: Path, name: str | None, out: Path | None) -> None:
     """An Ossie skeleton from a SQLite catalogue: datasets, fields, keys, joins. No descriptions or metrics."""
     from .sqlite import draft as do_draft
-    text = "# Drafted by datagraph from a SQLite catalogue: add descriptions, ai_context and metrics.\n" + \
+    text = "# Drafted by data-graf (dgr) from a SQLite catalogue: add descriptions, ai_context and metrics.\n" + \
         yaml.safe_dump(do_draft(db, name), sort_keys=False, allow_unicode=True)
     if out:
         out.write_text(text, encoding="utf-8")
