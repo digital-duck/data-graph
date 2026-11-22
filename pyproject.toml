@@ -16,6 +16,7 @@ dependencies = [
     "jsonschema>=4.20",
     "click>=8.1",
     "zinet>=0.2.2",
+    "dd-db>=0.1.3",              # database access (read-only SQLite; DuckDB, Postgres, Snowflake, ... adapters)
 ]
 
 [project.optional-dependencies]

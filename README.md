@@ -10,7 +10,7 @@ data-graph turns one into a graph and answers questions about it:
 - **profiling:** read-only, against the data behind the model;
 - **drawing and export:** through [zinet](https://github.com/digital-duck/zinet).
 
-It is part of the digital-duck family: zinet for the graph format and drawing, [GraphLang](https://github.com/digital-duck/graflang)
+It is part of the digital-duck family: zinet for the graph format and drawing, dd-db for database access, [GraphLang](https://github.com/digital-duck/graflang)
 for the LLM steps (planned), beside app-graph, work-graph and concept-book. Prototype: version 0.1.0.dev0. See
 [docs/DEV/plan.md](docs/DEV/plan.md) for the design and what comes next.
 

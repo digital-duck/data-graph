@@ -1,12 +1,16 @@
-"""SQLite: draft an Ossie skeleton from a catalogue, and profile the data behind a model. Read-only throughout.
+"""Databases, through dd-db: draft an Ossie skeleton from a catalogue, and profile the data behind a model. Read-only.
 
-The database is opened `mode=ro` with `PRAGMA query_only`, so nothing here can write to it. Identifiers come from the
-model or the catalogue and are always quoted; values are never interpolated.
+The connection is dd-db's `SQLiteDB(path, read_only=True)` (`mode=ro` plus `PRAGMA query_only`), so nothing here can
+write. Identifiers come from the model or the catalogue and are always quoted; values are never interpolated.
+dd-db has adapters for DuckDB, Postgres, Snowflake and more; `draft` and `profile` use only `BaseDB` methods, so
+another adapter is a matter of `connect()` (see docs/DEV/plan.md, "Next").
 """
 from __future__ import annotations
 
-import sqlite3
 from pathlib import Path
+from typing import Any
+
+from dd_db import BaseDB, SQLiteDB
 
 from .model import SemanticModel
 
@@ -15,13 +19,12 @@ _TYPES = (("INT", "Integer"), ("CHAR", "String"), ("CLOB", "String"), ("TEXT", "
           ("DATETIME", "DateTime"), ("TIMESTAMP", "DateTime"), ("DATE", "Date"), ("TIME", "Time"))
 
 
-def connect(db: str | Path) -> sqlite3.Connection:
+def connect(db: str | Path) -> BaseDB:
+    """A read-only dd-db connection to a SQLite file."""
     p = Path(db).resolve()
     if not p.is_file():
         raise FileNotFoundError(f"no database at {p}")
-    con = sqlite3.connect(f"file:{p}?mode=ro", uri=True)
-    con.execute("PRAGMA query_only = ON")
-    return con
+    return SQLiteDB(str(p), read_only=True)
 
 
 def q(name: str) -> str:
@@ -29,7 +32,7 @@ def q(name: str) -> str:
 
 
 def ossie_type(decl: str) -> str | None:
-    """A SQLite declared type as an Ossie datatype (SQLite's affinity rules, roughly); None when it says nothing."""
+    """A declared SQL type as an Ossie datatype (SQLite's affinity rules, roughly); None when it says nothing."""
     d = (decl or "").upper()
     for key, t in _TYPES:
         if key in d:
@@ -37,98 +40,95 @@ def ossie_type(decl: str) -> str | None:
     return None
 
 
-def draft(db: str | Path, name: str | None = None, version: str = "0.3.0.dev0") -> dict:
+def _scalar(db: BaseDB, sql: str) -> Any:
+    df = db.run_query(sql)
+    v = df.iat[0, 0]
+    return v.item() if hasattr(v, "item") else v          # numpy scalar -> Python
+
+
+def _row(db: BaseDB, sql: str) -> list:
+    return [v.item() if hasattr(v, "item") else v for v in db.run_query(sql).iloc[0].tolist()]
+
+
+def draft(db: str | Path | BaseDB, name: str | None = None, version: str = "0.3.0.dev0") -> dict:
     """An Ossie document from the catalogue: one dataset per table, one field per column, the primary key, and one
     relationship per foreign key. No descriptions and no metrics: those need a person or a model."""
-    con = connect(db)
-    try:
-        tables = [r[0] for r in con.execute(
-            "SELECT name FROM sqlite_master WHERE type IN ('table','view') AND name NOT LIKE 'sqlite_%' ORDER BY name")]
-        datasets, rels = [], []
-        for t in tables:
-            cols = con.execute(f"PRAGMA table_info({q(t)})").fetchall()       # cid, name, type, notnull, default, pk
-            pk = [c[1] for c in sorted((c for c in cols if c[5]), key=lambda c: c[5])]
-            fields = []
-            for c in cols:
-                f = {"name": c[1], "expression": {"sql": c[1]}}
-                if ossie_type(c[2]):
-                    f["datatype"] = ossie_type(c[2])
-                if f.get("datatype") in ("Date", "Time", "DateTime"):
-                    f["dimension"] = {"is_time": True}
-                fields.append(f)
-            ds = {"name": t, "source": t, "fields": fields}
-            if pk:
-                ds["primary_key"] = pk
-            datasets.append(ds)
-            fks: dict[int, list] = {}
-            for r in con.execute(f"PRAGMA foreign_key_list({q(t)})").fetchall():   # id, seq, table, from, to, ...
-                fks.setdefault(r[0], []).append(r)
-            for rows in fks.values():
-                rows.sort(key=lambda r: r[1])
-                target = rows[0][2]
-                to_cols = [r[4] for r in rows]
-                if any(c is None for c in to_cols):                            # FK to the implicit primary key
-                    to_cols = [c[1] for c in sorted((c for c in con.execute(f"PRAGMA table_info({q(target)})") if c[5]),
-                                                    key=lambda c: c[5])]
-                rels.append({"name": f"{t}_to_{target}" + (f"_{rows[0][3]}" if len(fks) > 1 else ""),
-                             "from": t, "to": target, "from_columns": [r[3] for r in rows], "to_columns": to_cols})
-    finally:
-        con.close()
-    doc: dict = {"version": version, "name": name or Path(db).stem, "datasets": datasets}
+    conn = db if isinstance(db, BaseDB) else connect(db)
+    schemas = {t: conn.get_schema(t) for t in conn.list_tables() if not t.startswith("sqlite_")}
+    datasets, rels = [], []
+    for t, s in sorted(schemas.items()):
+        fields = []
+        for c in s.columns:
+            f: dict = {"name": c.name, "expression": {"sql": c.name}}
+            if ossie_type(c.data_type):
+                f["datatype"] = ossie_type(c.data_type)
+            if f.get("datatype") in ("Date", "Time", "DateTime"):
+                f["dimension"] = {"is_time": True}
+            fields.append(f)
+        ds: dict = {"name": t, "source": t, "fields": fields}
+        pk = [c.name for c in s.columns if c.primary_key]     # dd-db lists columns in order; composite keys keep it
+        if pk:
+            ds["primary_key"] = pk
+        datasets.append(ds)
+        for fk in s.foreign_keys:
+            to_cols = fk.ref_columns or [c.name for c in schemas[fk.ref_table].columns if c.primary_key] \
+                if fk.ref_table in schemas else fk.ref_columns
+            rels.append({"name": f"{t}_to_{fk.ref_table}" + (f"_{fk.columns[0]}" if len(s.foreign_keys) > 1 else ""),
+                         "from": t, "to": fk.ref_table, "from_columns": fk.columns, "to_columns": to_cols})
+    stem = Path(db).stem if not isinstance(db, BaseDB) else "model"
+    doc: dict = {"version": version, "name": name or stem, "datasets": datasets}
     if rels:
         doc["relationships"] = rels
     return doc
 
 
-def _table(con: sqlite3.Connection, source: str) -> str | None:
-    """The SQLite table a dataset's `source` names: the whole name, else its last dotted part (db.schema.table)."""
-    have = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type IN ('table','view')")}
+def _table(tables: set[str], source: str) -> str | None:
+    """The table a dataset's `source` names: the whole name, else its last dotted part (db.schema.table)."""
     for cand in (source, source.split(".")[-1]):
-        if cand in have:
+        if cand in tables:
             return cand
     return None
 
 
-def profile(model: SemanticModel, db: str | Path, *, distinct_limit: int = 1_000_000) -> dict:
+def profile(model: SemanticModel, db: str | Path | BaseDB, *, distinct_limit: int = 1_000_000) -> dict:
     """Row counts per dataset; per field the non-null and distinct counts, min and max; each dataset-scoped metric's value.
     A field or metric whose SQL does not run reports its error instead of a value."""
-    con = connect(db)
-    out: dict = {"model": model.name, "database": str(Path(db).resolve()), "datasets": []}
-    try:
-        for d in model.datasets:
-            entry: dict = {"name": d.name, "source": d.source, "fields": [], "metrics": []}
-            out["datasets"].append(entry)
-            table = _table(con, d.source)
-            if table is None:
-                entry["error"] = f"no table for source {d.source!r}"
-                continue
-            entry["table"] = table
-            rows = con.execute(f"SELECT COUNT(*) FROM {q(table)}").fetchone()[0]
-            entry["rows"] = rows
-            # each field's expression, named by the field, so dataset-scoped metrics can use field names
-            exprs = [(f, f.sql or q(f.name)) for f in d.fields]
-            inner = ", ".join(f"({sql}) AS {q(f.name)}" for f, sql in exprs) or "1 AS one"
-            view = f"(SELECT {inner} FROM {q(table)}) AS t"
-            for f, sql in exprs:
-                fe: dict = {"name": f.name}
+    conn = db if isinstance(db, BaseDB) else connect(db)
+    where = str(Path(db).resolve()) if not isinstance(db, BaseDB) else str(conn.connection_info())
+    out: dict = {"model": model.name, "database": where, "datasets": []}
+    tables = set(conn.list_tables())
+    for d in model.datasets:
+        entry: dict = {"name": d.name, "source": d.source, "fields": [], "metrics": []}
+        out["datasets"].append(entry)
+        table = _table(tables, d.source)
+        if table is None:
+            entry["error"] = f"no table for source {d.source!r}"
+            continue
+        entry["table"] = table
+        rows = _scalar(conn, f"SELECT COUNT(*) FROM {q(table)}")
+        entry["rows"] = rows
+        # each field's expression, named by the field, so dataset-scoped metrics can use field names
+        exprs = [(f, f.sql or q(f.name)) for f in d.fields]
+        inner = ", ".join(f"({sql}) AS {q(f.name)}" for f, sql in exprs) or "1 AS one"
+        view = f"(SELECT {inner} FROM {q(table)}) AS t"
+        for f, sql in exprs:
+            fe: dict = {"name": f.name}
+            try:
+                nn, dist, lo, hi = _row(conn,
+                    f"SELECT COUNT({q(f.name)}), COUNT(DISTINCT {q(f.name)}), MIN({q(f.name)}), MAX({q(f.name)}) "
+                    f"FROM (SELECT ({sql}) AS {q(f.name)} FROM {q(table)} LIMIT {int(distinct_limit)})")
+                fe.update(non_null=nn, nulls=rows - nn if rows <= distinct_limit else None, distinct=dist, min=lo, max=hi)
+            except Exception as e:                       # the database's own error, whichever adapter raised it
+                fe["error"] = str(e)
+            entry["fields"].append(fe)
+        for m in d.metrics:
+            me: dict = {"name": m.name, "sql": m.sql}
+            if m.sql is None:
+                me["error"] = "no SQL expression"
+            else:
                 try:
-                    nn, dist, lo, hi = con.execute(
-                        f"SELECT COUNT({q(f.name)}), COUNT(DISTINCT {q(f.name)}), MIN({q(f.name)}), MAX({q(f.name)}) "
-                        f"FROM (SELECT ({sql}) AS {q(f.name)} FROM {q(table)} LIMIT {int(distinct_limit)})").fetchone()
-                    fe.update(non_null=nn, nulls=rows - nn if rows <= distinct_limit else None, distinct=dist, min=lo, max=hi)
-                except sqlite3.Error as e:
-                    fe["error"] = str(e)
-                entry["fields"].append(fe)
-            for m in d.metrics:
-                me: dict = {"name": m.name, "sql": m.sql}
-                if m.sql is None:
-                    me["error"] = "no SQL expression"
-                else:
-                    try:
-                        me["value"] = con.execute(f"SELECT {m.sql} FROM {view}").fetchone()[0]
-                    except sqlite3.Error as e:
-                        me["error"] = str(e)
-                entry["metrics"].append(me)
-    finally:
-        con.close()
+                    me["value"] = _scalar(conn, f"SELECT {m.sql} FROM {view}")
+                except Exception as e:
+                    me["error"] = str(e)
+            entry["metrics"].append(me)
     return out

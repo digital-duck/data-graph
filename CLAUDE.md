@@ -18,11 +18,14 @@ datagraph validate tests/fixtures/ossie/tpcds_semantic_model.yaml
   Unresolved references go into `G.graph["problems"]`; they are never guessed. Joins live in `G.graph["joins"]`, not as edges.
 - `checks.py`: the bundled JSON Schema for the document's version, plus reference, join and gap checks.
 - `export.py`: zinet `graph.yaml` (sources and columns are primitives, the model is the one application), or JSON.
-- `sqlite.py`: `draft()` from a catalogue, `profile()` of the data. Always opened `mode=ro` + `PRAGMA query_only`.
+- `sqlite.py`: `draft()` from a catalogue, `profile()` of the data, through dd-db (`SQLiteDB(path, read_only=True)`,
+  i.e. `mode=ro` + `PRAGMA query_only`). Uses only `BaseDB` methods, so other dd-db adapters can follow.
 - `cli.py`: the `datagraph` / `dg` click group. Exit 0 ok, 1 model errors, 2 usage.
 
 ## Rules
 
+- Reuse the dd-* stack (dd-db, dd-llm via GraphLang, dd-config, dd-logging) rather than writing a local version; if a dd
+  package lacks something, add it there.
 - No LLM calls in the library. LLM work will be GraphLang recipes (see the plan), as in app-graph.
 - Databases are only ever opened read-only. Quote identifiers with `sqlite.q()`.
 - `from __future__ import annotations` in every module.

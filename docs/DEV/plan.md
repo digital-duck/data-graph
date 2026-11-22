@@ -18,8 +18,9 @@ With the graph you can:
 - draw it, and export it to zinet's `graph.yaml`;
 - later, draft and query it with an LLM through GraphLang recipes.
 
-It is a sibling of app-graph, work-graph and concept-book: **zinet** for the graph format and drawing, **GraphLang** for the
-LLM steps. It is its own package rather than a work-graph area because profiling and running SQL touch the data, which needs
+It is a sibling of app-graph, work-graph and concept-book, built on the shared stack: **zinet** for the graph format and
+drawing, **dd-db** for database access (read-only), **GraphLang** (over **dd-llm**) for the LLM steps; **dd-config** and
+**dd-logging** come in with connection settings and recipe runs. It is its own package rather than a work-graph area because profiling and running SQL touch the data, which needs
 credentials and connectors. work-graph stays a files-only knowledge layer and will get a thin `data` area whose processor
 calls data-graph's reader (see zinets `docs/graph-vision/README-graflang-roadmap.md`, domain 6).
 
@@ -99,7 +100,9 @@ benchmark across ten models. What carries over:
    - `ossie_draft`: fill in the skeleton's descriptions, synonyms and metrics from the data and the docs. It uses "draft, validate, repair", with `validate` as the check, as app-graph's `compile_blueprint` does.
    - `ask`: text to SQL that must cite metric and field ids, checked by a program. The SQL is compiled from the semantic layer and run read-only before it is shown. Benchmarked on Chinook against data-copilot.
 2. **Model-scoped metrics in `profile`.** Compile the joins from the relationships (many-to-one, from the fact outward), per `core-spec/relational_semantics.md`.
-3. **Connectors beyond SQLite:** DuckDB, then any SQLAlchemy URL; Snowflake and Postgres read-only.
+3. **Connectors beyond SQLite**, through dd-db's adapters (DuckDB, Postgres, Snowflake, BigQuery, ...): `draft` and `profile`
+   already use only `BaseDB` methods. Each adapter needs a read-only mode first (dd-db 0.1.3 added it for SQLite; DuckDB has
+   one), and `TableSchema.foreign_keys` filled in. Connection settings through dd-config.
 4. **Importers.** `bus_term.csv`, a dbt project (models and the MetricFlow semantic models, which Ossie already converts), and CSV files.
 5. **work-graph's `data` area.** The pack plus an `ossie` processor that calls `datagraph.load` and `datagraph.lineage`.
 6. **Ossie's ontology documents** (`*.ontology.yaml`, `*.mapping.yaml`), after the spec settles.

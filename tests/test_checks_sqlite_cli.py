@@ -120,10 +120,8 @@ class TestSqlite:
 
     def test_read_only(self, shop_db, shop_model):
         before = hashlib.sha256(shop_db.read_bytes()).hexdigest()
-        con = connect(shop_db)
         with pytest.raises(sqlite3.OperationalError):
-            con.execute("DELETE FROM orders")
-        con.close()
+            connect(shop_db).run_query("DELETE FROM orders")
         doc = copy.deepcopy(SHOP_MODEL)                       # SQL in a model cannot write either
         doc["datasets"][0]["metrics"].append({"name": "evil", "expression": {"sql": "1); DELETE FROM orders; SELECT (1"}})
         profile(dg.load(write_yaml(shop_model.parent / "e.yaml", doc)), shop_db)
