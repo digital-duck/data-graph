@@ -79,12 +79,13 @@ It has three front ends over one engine: a Streamlit UI (five pages), a click CL
 - **SQL still runs as written, and can write.**
   - `SQLiteDB.run_query` commits anything that is not `SELECT`/`WITH`/`PRAGMA`.
   - The `/run` endpoint runs any SQL it is sent.
-  - `anadata-api` binds to `0.0.0.0` by default, so anyone on the network who can reach port 8000 can change the database. Before the API is used outside a laptop, open SQLite read-only (`mode=ro`, `PRAGMA query_only`) and bind to `127.0.0.1`.
+  - `anadata-api` binds to `0.0.0.0` by default, so anyone on the network who can reach port 8000 could change the database.
+  - **Fixed 2026-11-22:** anadata now uses dd-db's `SQLiteDB(read_only=True)` (new in dd-db 0.1.3), with `database.read_only` defaulting to `true`, and its own copy of the SQLite class is gone. Its DDL now includes `FOREIGN KEY` lines, which helps the model with joins. Still open: binding the API to `127.0.0.1`, and read-only for Postgres in dd-db.
 - **`exec` of model-written Plotly code**, in the app's own process.
 - **Validity is still "it parses"** (`sqlparse`). Nothing checks that the tables and columns exist, that the joins follow the foreign keys, or that "revenue" means what the business means by revenue.
 - **The knowledge is still opaque text in a vector store.** DDL strings, documentation strings and example pairs carry no structure. There are no metrics, no join paths and no lineage, and nothing can say which example breaks when a column changes.
 - **No tests.** It has a manual checklist (`readme-plan.md`, "Verification Checklist").
-- **`get_schema` builds SQL with an f-string** (`PRAGMA table_info({table_name})`). Table names come from `sqlite_master`, so the risk is low, but they are not quoted.
+- **`get_schema` built SQL with an f-string** (`PRAGMA table_info({table_name})`), unquoted. Fixed by the same move to dd-db 0.1.3, which quotes identifiers.
 
 ## 3. Why data-graph now
 
