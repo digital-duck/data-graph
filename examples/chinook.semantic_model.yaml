@@ -1,0 +1,502 @@
+# Chinook (the sample database data-copilot used in 2023) as an Ossie semantic model.
+# Drafted with `datagraph draft --sqlite chinook.sqlite3`, then finished by hand: descriptions, synonyms, metrics.
+# yaml-language-server: $schema=../src/datagraph/schemas/ossie-0.3.0.dev0.schema.json
+version: 0.3.0.dev0
+name: chinook_music_store
+datasets:
+- name: albums
+  source: albums
+  fields:
+  - name: AlbumId
+    expression:
+      sql: AlbumId
+    datatype: Integer
+  - name: Title
+    expression:
+      sql: Title
+    datatype: String
+  - name: ArtistId
+    expression:
+      sql: ArtistId
+    datatype: Integer
+  primary_key:
+  - AlbumId
+  description: Albums, each by one artist
+  ai_context:
+    synonyms:
+    - record
+- name: artists
+  source: artists
+  fields:
+  - name: ArtistId
+    expression:
+      sql: ArtistId
+    datatype: Integer
+  - name: Name
+    expression:
+      sql: Name
+    datatype: String
+  primary_key:
+  - ArtistId
+  description: Recording artists
+  ai_context:
+    synonyms:
+    - band
+    - musician
+- name: customers
+  source: customers
+  fields:
+  - name: CustomerId
+    expression:
+      sql: CustomerId
+    datatype: Integer
+  - name: FirstName
+    expression:
+      sql: FirstName
+    datatype: String
+  - name: LastName
+    expression:
+      sql: LastName
+    datatype: String
+  - name: Company
+    expression:
+      sql: Company
+    datatype: String
+  - name: Address
+    expression:
+      sql: Address
+    datatype: String
+  - name: City
+    expression:
+      sql: City
+    datatype: String
+  - name: State
+    expression:
+      sql: State
+    datatype: String
+  - name: Country
+    expression:
+      sql: Country
+    datatype: String
+  - name: PostalCode
+    expression:
+      sql: PostalCode
+    datatype: String
+  - name: Phone
+    expression:
+      sql: Phone
+    datatype: String
+  - name: Fax
+    expression:
+      sql: Fax
+    datatype: String
+  - name: Email
+    expression:
+      sql: Email
+    datatype: String
+  - name: SupportRepId
+    expression:
+      sql: SupportRepId
+    datatype: Integer
+  primary_key:
+  - CustomerId
+  description: Store customers
+  ai_context:
+    synonyms:
+    - buyer
+    - client
+- name: employees
+  source: employees
+  fields:
+  - name: EmployeeId
+    expression:
+      sql: EmployeeId
+    datatype: Integer
+  - name: LastName
+    expression:
+      sql: LastName
+    datatype: String
+  - name: FirstName
+    expression:
+      sql: FirstName
+    datatype: String
+  - name: Title
+    expression:
+      sql: Title
+    datatype: String
+  - name: ReportsTo
+    expression:
+      sql: ReportsTo
+    datatype: Integer
+  - name: BirthDate
+    expression:
+      sql: BirthDate
+    datatype: DateTime
+    dimension:
+      is_time: true
+  - name: HireDate
+    expression:
+      sql: HireDate
+    datatype: DateTime
+    dimension:
+      is_time: true
+  - name: Address
+    expression:
+      sql: Address
+    datatype: String
+  - name: City
+    expression:
+      sql: City
+    datatype: String
+  - name: State
+    expression:
+      sql: State
+    datatype: String
+  - name: Country
+    expression:
+      sql: Country
+    datatype: String
+  - name: PostalCode
+    expression:
+      sql: PostalCode
+    datatype: String
+  - name: Phone
+    expression:
+      sql: Phone
+    datatype: String
+  - name: Fax
+    expression:
+      sql: Fax
+    datatype: String
+  - name: Email
+    expression:
+      sql: Email
+    datatype: String
+  primary_key:
+  - EmployeeId
+  description: Staff; support reps serve customers
+  ai_context:
+    synonyms:
+    - staff
+    - rep
+- name: genres
+  source: genres
+  fields:
+  - name: GenreId
+    expression:
+      sql: GenreId
+    datatype: Integer
+  - name: Name
+    expression:
+      sql: Name
+    datatype: String
+  primary_key:
+  - GenreId
+  description: Music genres
+- name: invoice_items
+  source: invoice_items
+  fields:
+  - name: InvoiceLineId
+    expression:
+      sql: InvoiceLineId
+    datatype: Integer
+  - name: InvoiceId
+    expression:
+      sql: InvoiceId
+    datatype: Integer
+  - name: TrackId
+    expression:
+      sql: TrackId
+    datatype: Integer
+  - name: UnitPrice
+    expression:
+      sql: UnitPrice
+    datatype: Decimal
+  - name: Quantity
+    expression:
+      sql: Quantity
+    datatype: Integer
+  primary_key:
+  - InvoiceLineId
+  description: 'Lines of an invoice: one track each'
+  ai_context:
+    synonyms:
+    - order line
+  metrics:
+  - name: units_sold
+    expression:
+      sql: SUM(Quantity)
+    datatype: Integer
+    description: Tracks sold
+  - name: line_revenue
+    expression:
+      sql: SUM(UnitPrice * Quantity)
+    datatype: Decimal
+    description: Revenue summed over invoice lines; equals invoice_revenue
+- name: invoices
+  source: invoices
+  fields:
+  - name: InvoiceId
+    expression:
+      sql: InvoiceId
+    datatype: Integer
+  - name: CustomerId
+    expression:
+      sql: CustomerId
+    datatype: Integer
+  - name: InvoiceDate
+    expression:
+      sql: InvoiceDate
+    datatype: DateTime
+    dimension:
+      is_time: true
+  - name: BillingAddress
+    expression:
+      sql: BillingAddress
+    datatype: String
+  - name: BillingCity
+    expression:
+      sql: BillingCity
+    datatype: String
+  - name: BillingState
+    expression:
+      sql: BillingState
+    datatype: String
+  - name: BillingCountry
+    expression:
+      sql: BillingCountry
+    datatype: String
+  - name: BillingPostalCode
+    expression:
+      sql: BillingPostalCode
+    datatype: String
+  - name: Total
+    expression:
+      sql: Total
+    datatype: Decimal
+  primary_key:
+  - InvoiceId
+  description: One purchase by a customer
+  ai_context:
+    synonyms:
+    - order
+    - sale
+  metrics:
+  - name: invoice_revenue
+    expression:
+      sql: SUM(Total)
+    datatype: Decimal
+    description: Money invoiced
+    ai_context:
+      synonyms:
+      - revenue
+      - sales
+      - total sales
+  - name: invoice_count
+    expression:
+      sql: COUNT(InvoiceId)
+    datatype: Integer
+    description: Number of invoices
+    ai_context:
+      synonyms:
+      - orders
+      - purchases
+- name: media_types
+  source: media_types
+  fields:
+  - name: MediaTypeId
+    expression:
+      sql: MediaTypeId
+    datatype: Integer
+  - name: Name
+    expression:
+      sql: Name
+    datatype: String
+  primary_key:
+  - MediaTypeId
+  description: Encodings a track is sold in
+  ai_context:
+    synonyms:
+    - format
+- name: playlist_track
+  source: playlist_track
+  fields:
+  - name: PlaylistId
+    expression:
+      sql: PlaylistId
+    datatype: Integer
+  - name: TrackId
+    expression:
+      sql: TrackId
+    datatype: Integer
+  primary_key:
+  - PlaylistId
+  - TrackId
+  description: Which tracks are on which playlist
+- name: playlists
+  source: playlists
+  fields:
+  - name: PlaylistId
+    expression:
+      sql: PlaylistId
+    datatype: Integer
+  - name: Name
+    expression:
+      sql: Name
+    datatype: String
+  primary_key:
+  - PlaylistId
+  description: Named playlists
+- name: tracks
+  source: tracks
+  fields:
+  - name: TrackId
+    expression:
+      sql: TrackId
+    datatype: Integer
+  - name: Name
+    expression:
+      sql: Name
+    datatype: String
+  - name: AlbumId
+    expression:
+      sql: AlbumId
+    datatype: Integer
+  - name: MediaTypeId
+    expression:
+      sql: MediaTypeId
+    datatype: Integer
+  - name: GenreId
+    expression:
+      sql: GenreId
+    datatype: Integer
+  - name: Composer
+    expression:
+      sql: Composer
+    datatype: String
+  - name: Milliseconds
+    expression:
+      sql: Milliseconds
+    datatype: Integer
+  - name: Bytes
+    expression:
+      sql: Bytes
+    datatype: Integer
+  - name: UnitPrice
+    expression:
+      sql: UnitPrice
+    datatype: Decimal
+  primary_key:
+  - TrackId
+  description: Tracks for sale, with genre, media type, length and price
+  ai_context:
+    synonyms:
+    - song
+  metrics:
+  - name: avg_track_minutes
+    expression:
+      sql: AVG(Milliseconds) / 60000.0
+    datatype: Float
+    description: Average track length in minutes
+relationships:
+- name: albums_to_artists
+  from: albums
+  to: artists
+  from_columns:
+  - ArtistId
+  to_columns:
+  - ArtistId
+- name: customers_to_employees
+  from: customers
+  to: employees
+  from_columns:
+  - SupportRepId
+  to_columns:
+  - EmployeeId
+- name: employees_to_employees
+  from: employees
+  to: employees
+  from_columns:
+  - ReportsTo
+  to_columns:
+  - EmployeeId
+- name: invoice_items_to_tracks_TrackId
+  from: invoice_items
+  to: tracks
+  from_columns:
+  - TrackId
+  to_columns:
+  - TrackId
+- name: invoice_items_to_invoices_InvoiceId
+  from: invoice_items
+  to: invoices
+  from_columns:
+  - InvoiceId
+  to_columns:
+  - InvoiceId
+- name: invoices_to_customers
+  from: invoices
+  to: customers
+  from_columns:
+  - CustomerId
+  to_columns:
+  - CustomerId
+- name: playlist_track_to_tracks_TrackId
+  from: playlist_track
+  to: tracks
+  from_columns:
+  - TrackId
+  to_columns:
+  - TrackId
+- name: playlist_track_to_playlists_PlaylistId
+  from: playlist_track
+  to: playlists
+  from_columns:
+  - PlaylistId
+  to_columns:
+  - PlaylistId
+- name: tracks_to_media_types_MediaTypeId
+  from: tracks
+  to: media_types
+  from_columns:
+  - MediaTypeId
+  to_columns:
+  - MediaTypeId
+- name: tracks_to_genres_GenreId
+  from: tracks
+  to: genres
+  from_columns:
+  - GenreId
+  to_columns:
+  - GenreId
+- name: tracks_to_albums_AlbumId
+  from: tracks
+  to: albums
+  from_columns:
+  - AlbumId
+  to_columns:
+  - AlbumId
+description: 'A digital music store: artists, albums and tracks, customers and the invoices they pay.'
+ai_context:
+  instructions: Revenue is invoice money (invoices.Total, or invoice_items UnitPrice * Quantity). A customer is served by
+    one support rep (an employee).
+metrics:
+- name: revenue_per_customer
+  expression:
+    sql: SUM(invoices.Total) / COUNT(DISTINCT customers.CustomerId)
+  datatype: Decimal
+  description: Average money invoiced per customer
+  ai_context:
+    synonyms:
+    - ARPU
+    - customer value
+- name: revenue_by_genre
+  expression:
+    sql: SUM(invoice_items.UnitPrice * invoice_items.Quantity)
+  datatype: Decimal
+  description: Line revenue; group by genres.Name (invoice_items -> tracks -> genres)
+- name: average_invoice
+  expression:
+    sql: SUM(invoices.invoice_revenue) / SUM(invoices.invoice_count)
+  datatype: Decimal
+  description: Mean invoice value, from the two dataset metrics
