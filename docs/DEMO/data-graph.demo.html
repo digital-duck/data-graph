@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>data-graph</title>
+<style>
+  :root {
+    --ink: #1c2330; --muted: #5b6678; --paper: #fbfbfa; --line: #dfe3ea;
+    --blue: #4f8df5; --gray: #8a919c; --green: #2e9e6b; --orange: #e8913a; --red: #d8473f;
+    --code-bg: #0f1623; --code-ink: #dbe4f3;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #e9ebef; color: var(--ink);
+    font: 26px/1.42 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .deck { position: fixed; inset: 0 0 4.5vh 0; display: grid; place-items: center; }
+  .slide { display: none; width: min(96vw, 158vh); height: min(54vw, 89vh); background: var(--paper);
+    border-radius: 14px; box-shadow: 0 8px 40px rgba(20,30,50,.18); padding: 4.2% 5.5% 3.5%;
+    flex-direction: column; overflow: hidden; position: relative; }
+  .slide.on { display: flex; }
+  h1 { font-size: 2.5em; line-height: 1.1; margin: 0 0 .3em; letter-spacing: -.02em; }
+  h2 { font-size: 1.7em; margin: 0 0 .5em; letter-spacing: -.01em; }
+  h2::after { content: ""; display: block; width: 64px; height: 4px; background: var(--blue); border-radius: 2px; margin-top: .25em; }
+  h3 { font-size: 1.05em; margin: 0 0 .3em; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .06em; }
+  p { margin: 0 0 .6em; }
+  ul { margin: 0; padding-left: 1.1em; }
+  li { margin: .3em 0; }
+  li > ul { font-size: .82em; margin-top: .1em; }
+  li::marker { color: var(--blue); }
+  .sub { color: var(--muted); font-size: 1.15em; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 3%; align-items: start; flex: 1; min-height: 0; }
+  .cols.wide-left { grid-template-columns: 1.25fr 1fr; }
+  .cols.wide-right { grid-template-columns: 1fr 1.25fr; }
+  pre, code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  code { background: #eef0f4; padding: .05em .35em; border-radius: 4px; font-size: .88em; }
+  pre { background: var(--code-bg); color: var(--code-ink); padding: .7em .9em; border-radius: 10px; font-size: .66em; line-height: 1.45;
+    margin: 0 0 .6em; overflow: hidden; white-space: pre; }
+  pre .c { color: #7d8ba3; } pre .k { color: #8cc4ff; } pre .s { color: #a5e3b4; } pre .h { color: #ffcf7a; }
+  .card { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: .6em .9em; }
+  .tag { display: inline-block; font-size: .62em; font-weight: 700; padding: .12em .6em; border-radius: 99px; color: #fff; vertical-align: middle; }
+  .t-gen { background: var(--blue); } .t-io { background: var(--gray); } .t-sol { background: var(--green); }
+  .t-ctl { background: var(--orange); } .t-safe { background: var(--red); }
+  table { border-collapse: collapse; width: 100%; font-size: .92em; }
+  th, td { text-align: left; padding: .35em .6em; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: .85em; text-transform: uppercase; letter-spacing: .05em; }
+  .big { font-size: 1.5em; line-height: 1.3; }
+  .center { text-align: center; }
+  .grow { flex: 1; min-height: 0; }
+  .foot { position: absolute; left: 5.5%; right: 5.5%; bottom: 1.8%; display: flex; justify-content: space-between;
+    color: #9aa3b2; font-size: .5em; }
+  .foot a { color: inherit; text-decoration: underline; }
+  .refs a { color: var(--blue); display: block; }
+  .refs li { font-size: .78em; }
+  .quiet { color: var(--muted); }
+  .good { color: var(--green); font-weight: 600; } .bad { color: var(--red); font-weight: 600; }
+  .demo { border-left: 6px solid var(--orange); background: #fff6ea; border-radius: 0 10px 10px 0; padding: .5em .9em; margin-bottom: .7em; font-size: .85em; }
+  .demo b { color: var(--orange); letter-spacing: .06em; font-size: .8em; text-transform: uppercase; }
+  .stack > * { margin-bottom: .45em; }
+  svg { max-width: 100%; height: auto; }
+  svg text { font: 600 13px system-ui, sans-serif; }
+  #bar { position: fixed; left: 0; top: 0; height: 4px; background: var(--blue); width: 0; transition: width .2s; z-index: 5; }
+  #nav { position: fixed; left: 50%; bottom: 8px; transform: translateX(-50%); display: flex; gap: 6px; z-index: 6; }
+  #nav button { font: 600 14px system-ui, sans-serif; min-width: 44px; padding: 6px 12px; border-radius: 8px; border: 1px solid #c9ced8;
+    background: #fff; color: var(--ink); cursor: pointer; }
+  #nav button:hover { background: #eef2fb; border-color: var(--blue); }
+  #nav button:disabled { opacity: .4; cursor: default; background: #fff; border-color: #c9ced8; }
+  #nav #pdf { margin-left: 10px; }
+  #nav #tocbtn { margin-right: 10px; }
+  #hud { position: fixed; right: 14px; bottom: 10px; font-size: 13px; color: #7d8696; z-index: 5; }
+  .toc { columns: 3; column-gap: 3%; list-style: none; margin: 0; padding: 0; font-size: .8em; }
+  .toc li { break-inside: avoid; margin: .22em 0; padding: .12em .3em; border-radius: 6px; cursor: pointer; display: flex; gap: .6em; }
+  .toc li:hover { background: #eef2fb; }
+  .toc .n { color: var(--blue); font-weight: 700; min-width: 1.6em; text-align: right; }
+  .notes { display: none; }
+  #notes-box { display: none; }
+  body.show-notes #notes-box { display: block; position: fixed; left: 0; right: 0; bottom: 0; max-height: 34vh; overflow: auto;
+    background: #141a26; color: #d7deeb; padding: 14px 6vw; font-size: 17px; line-height: 1.5; z-index: 9; }
+  @page { size: 13.333in 7.5in; margin: 0; }
+  @media print {
+    html, body { background: #fff; height: auto; font-size: 24px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .deck { position: static; display: block; }
+    .slide { display: flex !important; width: 13.333in; height: 7.5in; border-radius: 0; box-shadow: none; break-after: page; page-break-after: always; }
+    .slide:last-child { break-after: auto; page-break-after: auto; }
+    pre { font-size: .58em; }       /* the page is smaller than the screen: keep code lines inside their box */
+    #bar, #hud, #nav, .notes, #notes-box { display: none !important; }
+  }
+</style>
+</head>
+<body data-title="data-graph">
+<div id="bar"></div>
+<div id="nav">
+  <button id="tocbtn" title="Outline (T)">TOC</button>
+  <button id="first" title="First slide (Home)">&lt;&lt;</button>
+  <button id="prev" title="Previous slide (←)">&lt;</button>
+  <button id="next" title="Next slide (→ or space)">&gt;</button>
+  <button id="last" title="Last slide (End)">&gt;&gt;</button>
+  <button id="pdf" title="Opens the print dialog: choose Save as PDF, landscape, margins None, and tick Background graphics">PDF</button>
+</div>
+<div id="hud">← → or space · T outline · F fullscreen · N notes · O overview</div>
+<div class="deck" id="deck">
+<section class="slide">
+  <div style="margin:auto 0">
+    <h1>data-graph</h1>
+    <p class="big">Lineage, checks and profiling for semantic layers written in Apache Ossie</p>
+    <p class="sub">A semantic model becomes a graph you can ask questions of.</p>
+  </div>
+  <div class="foot"><span><a href="https://github.com/digital-duck/data-graph" target="_blank" rel="noopener">https://github.com/digital-duck/data-graph</a></span><span></span></div>
+  <aside class="notes">data-graph reads an Apache Ossie semantic model and turns it into a lineage graph. With that graph you can trace metrics, check the model and profile the data behind it. It is a prototype, and this talk shows what works today.</aside>
+</section>
+
+<section class="slide" id="outline">
+  <h2>Outline</h2>
+  <ol class="toc" id="toc"></ol>
+  <aside class="notes">The outline lists every slide title; click a line to jump.</aside>
+</section>
+
+<section class="slide">
+  <h2>The problem: trusting the answer</h2>
+  <p class="big">Let an analyst ask a database questions in plain language, <b>and trust the answer</b>.</p>
+  <ul>
+    <li>data-graph is the third attempt at this goal: data-copilot, then anadata, then data-graph.</li>
+    <li>The earlier tools sent the LLM's SQL on after a parse: <code>is_sql_valid</code> only parses.</li>
+    <li>Parsing says nothing about whether the SQL uses real tables, runs, or answers the question.</li>
+  </ul>
+  <aside class="notes">Getting an LLM to write SQL is the easy part. The hard part is knowing whether to trust what it wrote. The earlier tools only checked that the SQL parsed.</aside>
+</section>
+
+<section class="slide">
+  <h2>Two earlier attempts</h2>
+  <div class="cols">
+    <div class="card stack">
+      <h3>data-copilot (2023)</h3>
+      <div>Streamlit app on vanna.ai, through the fork <code>ssadata</code></div>
+      <div>✔ Knowledge base: DDL, docs, question/SQL pairs, business terms</div>
+      <div>✔ Measured: 24 Chinook questions across ten models</div>
+      <div>Logic in Streamlit pages and a 1,474-line <code>utils.py</code>, no tests</div>
+      <div>The SQL was trusted; <code>allow_llm_to_see_data=True</code></div>
+    </div>
+    <div class="card stack">
+      <h3>anadata (2026)</h3>
+      <div>Its own <code>AnaData</code> class on the dd-* stack</div>
+      <div>Same idea, with retrieval through dd-embed / dd-vectordb</div>
+      <div>About 2,900 lines, no tests</div>
+    </div>
+  </div>
+  <aside class="notes">data-copilot got two things right: the knowledge-base idea, and measuring results on the 24 Chinook questions. What held it back was an engine it did not own, logic buried in the UI, no tests, and SQL that was trusted. anadata rebuilt the engine on the dd stack but also had no tests.</aside>
+</section>
+
+<section class="slide">
+  <h2>The idea: a semantic model as a lineage graph</h2>
+  <div class="cols wide-left">
+    <ul>
+      <li>Read a model in <b>Apache Ossie</b>, an open YAML/JSON format for datasets, fields, metrics and joins.</li>
+      <li>Stack it in layers:</li>
+      <li><span class="tag t-sol">top</span> metrics computed from fields</li>
+      <li><span class="tag t-gen">middle</span> datasets and fields that read the tables</li>
+      <li><span class="tag t-io">bottom</span> physical source tables and columns</li>
+    </ul>
+    <div class="card stack">
+      <h3>With the graph</h3>
+      <div>✔ lineage (upstream)</div>
+      <div>✔ impact (downstream)</div>
+      <div>✔ checks for gaps</div>
+      <div>✔ read-only profiling</div>
+      <div>✔ drawing and export</div>
+    </div>
+  </div>
+  <aside class="notes">A semantic layer already says what the context for a question should be. data-graph turns it into a graph, so questions about the model become graph walks.</aside>
+</section>
+
+<section class="slide">
+  <h2>Apache Ossie, two shapes</h2>
+  <table>
+    <tr><th></th><th>0.1.1 (released)</th><th>0.3.0.dev0 (draft)</th></tr>
+    <tr><td>document</td><td><code>semantic_model:</code> list</td><td>one model at the root</td></tr>
+    <tr><td>expression</td><td><code>dialects</code></td><td><code>sql</code> (authoritative)</td></tr>
+    <tr><td>field type</td><td>none</td><td><code>datatype</code></td></tr>
+    <tr><td>bundled schema</td><td><code>osi-0.1.1.schema.json</code></td><td><code>ossie-0.3.0.dev0.schema.json</code></td></tr>
+  </table>
+  <ul>
+    <li>Both shapes are read, and each is checked against its own schema in <code>src/datagraf/schemas/</code>.</li>
+  </ul>
+  <aside class="notes">Ossie, formerly Open Semantic Interchange, is incubating at Apache and has two shapes in use. The released 0.1.1 and the 0.3.0 draft are both supported. Expression text comes from sql, or else the OSSIE_SQL_2026 or ANSI_SQL dialect entry.</aside>
+</section>
+
+<section class="slide">
+  <h2>The graph</h2>
+  <div class="cols">
+    <table>
+      <tr><th>id</th><th>from</th></tr>
+      <tr><td><code>source:&lt;table&gt;</code></td><td>a dataset's <code>source</code></td></tr>
+      <tr><td><code>column:&lt;table&gt;.&lt;col&gt;</code></td><td>a column a field names</td></tr>
+      <tr><td><code>dataset:&lt;name&gt;</code></td><td><code>datasets[]</code></td></tr>
+      <tr><td><code>field:&lt;dataset&gt;.&lt;name&gt;</code></td><td><code>fields[]</code></td></tr>
+      <tr><td><code>metric:...</code></td><td>dataset or model metrics</td></tr>
+    </table>
+    <ul>
+      <li>Node ids <b>carry their kind</b>, so names never collide.</li>
+      <li>Edges point from what is needed to what needs it.</li>
+      <li>A networkx DiGraph, built by <code>build()</code> in <code>lineage.py</code>.</li>
+      <li>Joins are kept in <code>G.graph["joins"]</code>, not as edges.</li>
+    </ul>
+  </div>
+  <aside class="notes">Every node id starts with its kind, so a table and a metric with the same name do not clash. Edges follow dependency direction. Joins are stored apart because they are not lineage.</aside>
+</section>
+
+<section class="slide">
+  <h2>References, never guessed</h2>
+  <ul>
+    <li><b>sqlglot</b> reads references, using the spec's scoping rules:</li>
+    <li>a field's SQL names columns of its dataset's <code>source</code></li>
+    <li>a dataset-scoped metric names that dataset's fields, unqualified</li>
+    <li>a model-scoped metric names <code>dataset.field</code> (or <code>dataset.metric</code>)</li>
+    <li>Unresolved references go into <code>G.graph["problems"]</code>; they are <b>never guessed</b>.</li>
+  </ul>
+  <pre><span class="c">-- a model-scoped metric over a dataset-scoped one</span>
+<span class="k">SUM</span>(<span class="h">store_sales.total_quantity</span>)</pre>
+  <aside class="notes">Lineage is only as good as the references behind it. data-graph parses expressions with sqlglot and follows the scoping rules from the spec. Anything it cannot resolve is reported as a problem and not filled in.</aside>
+</section>
+
+<section class="slide">
+  <h2>Lineage and impact</h2>
+  <pre><span class="c"># upstream: what a metric is made of, down to source columns</span>
+dgr lineage model.yaml total_sales
+
+<span class="c"># downstream: the metrics a column feeds</span>
+dgr impact model.yaml store_sales.ss_ext_sales_price</pre>
+  <ul>
+    <li>A name can be a metric (<code>total_sales</code>)</li>
+    <li>or a dataset-scoped metric or field (<code>store_sales.total_quantity</code>), or a dataset</li>
+    <li>or a node id (<code>column:tpcds.public.store_sales.ss_quantity</code>)</li>
+  </ul>
+  <aside class="notes">Lineage walks up the graph to source columns. Impact walks down to show which metrics a change would affect. Names are resolved flexibly, and you can always fall back to a full node id.</aside>
+</section>
+
+<section class="slide">
+  <h2>Checks and exit codes</h2>
+  <div class="cols">
+    <ul>
+      <li><code>dgr validate</code>: the JSON Schema for the file's Ossie version, then reference, join and gap checks.</li>
+      <li><code>dgr check</code>: references, joins and gaps only, with no schema.</li>
+      <li><code>--strict</code> on validate: warnings fail too.</li>
+      <li>Checks find unknown references, joins to undeclared datasets or fields, and metrics over datasets with no join path.</li>
+    </ul>
+    <table>
+      <tr><th>exit</th><th>meaning</th></tr>
+      <tr><td>0</td><td>ok</td></tr>
+      <tr><td>1</td><td>model errors (or an unchecked answer)</td></tr>
+      <tr><td>2</td><td>usage or load error</td></tr>
+    </table>
+  </div>
+  <aside class="notes">validate is the full check and check is the fast one. The exit codes are fixed, so either command can run in CI.</aside>
+</section>
+
+<section class="slide">
+  <h2>Draft and profile, read-only</h2>
+  <pre><span class="c"># a skeleton model from a SQLite catalogue</span>
+dgr draft --sqlite shop.db -o shop.semantic_model.yaml
+
+<span class="c"># rows, nulls, distinct, ranges, metric values</span>
+dgr profile model.yaml --sqlite shop.db</pre>
+  <ul>
+    <li>Both go through dd-db with <code>SQLiteDB(path, read_only=True)</code>: <code>mode=ro</code> plus <code>PRAGMA query_only</code>.</li>
+    <li>Databases are only ever opened read-only.</li>
+    <li>Only <code>BaseDB</code> methods are used, so other dd-db adapters can follow.</li>
+  </ul>
+  <aside class="notes">draft gives you a starting model from an existing database. profile looks at the data behind a model. Neither one can write to the database.</aside>
+</section>
+
+<section class="slide">
+  <h2>Export and drawing</h2>
+  <pre><span class="c"># zinet graph.yaml, or --format json</span>
+dgr export model.yaml --format zinet -o lineage.graph.yaml
+
+<span class="c"># or --format mermaid / ascii / svg / png</span>
+dgr render model.yaml -o lineage.html</pre>
+  <ul>
+    <li>In the zinet export, sources and columns are primitives and the model is the one application.</li>
+    <li>Drawing goes through <b>zinet</b>, the graph format the digital-duck family shares.</li>
+  </ul>
+  <aside class="notes">The graph can leave data-graph in two ways: as zinet's graph.yaml or as plain JSON. render draws it in several formats through zinet.</aside>
+</section>
+
+<section class="slide">
+  <h2>LLM work lives in GraphLang recipes</h2>
+  <ul>
+    <li><b>No LLM calls in the library.</b> LLM steps are GraphLang recipes: <code>ask</code> and <code>ossie_draft</code>.</li>
+    <li>The model is chosen with <code>--llm ADAPTER[:MODEL]</code>: default <code>claude_cli</code>, or <code>ollama:llama3.2</code> to run locally.</li>
+    <li>SOLVE steps run as <code>python3 -I -m datagraf.tool STEP</code>, with JSON on stdin and stdout.</li>
+    <li>A recipe step that writes is <code>risky: true</code>, behind a Cedar GUARD.</li>
+    <li>Tests drive the recipes with a scripted model (an object with <code>generate()</code>), never a real one.</li>
+  </ul>
+  <aside class="notes">The library is plain code with tests. Anything that needs a model lives in a recipe, and the program half of each recipe is ordinary Python. That split is why the tests need no network and no LLM.</aside>
+</section>
+
+<section class="slide">
+  <h2>The ask recipe</h2>
+  <pre>dgr ask model.yaml <span class="s">"top 5 customers by money spent"</span> --sqlite shop.db</pre>
+  <ul>
+    <li>Context: only the datasets the question names, plus the join paths between them (<code>--scope all</code> shows everything).</li>
+    <li>The SQL must be <b>one read-only statement</b> over real tables and columns, and it must run.</li>
+    <li>A failure goes back to the model up to <code>--max-repairs</code> times.</li>
+    <li>The report says <code>CHECKED</code> or <code>FAILED</code>, and <b>a program decides which</b>.</li>
+  </ul>
+  <aside class="notes">This is the answer to the trust problem. The model sees a narrow context, and its SQL is checked against the model and actually run. The verdict comes from check_sql and report in ask.py, not from the LLM.</aside>
+</section>
+
+<section class="slide">
+  <h2>The ossie_draft recipe</h2>
+  <pre>dgr draft --sqlite shop.db --enrich -o shop.semantic_model.yaml</pre>
+  <ul>
+    <li>Starts from the skeleton, then adds descriptions, synonyms, dimensions and metrics.</li>
+    <li>It may <b>not change what the catalogue says</b>: <code>check()</code> confirms the structure is unchanged.</li>
+    <li>Every metric must run on the data.</li>
+    <li>The write sits behind a <b>Cedar policy</b>: an absolute path under your home or the temporary folder, never over an existing file unless asked.</li>
+  </ul>
+  <aside class="notes">The LLM gets to enrich the model, not rewrite it. The program checks the result before it is written, and a policy limits where it can be written.</aside>
+</section>
+
+<section class="slide">
+  <h2>Demo: the Chinook model</h2>
+  <p><code>examples/chinook.semantic_model.yaml</code> is the Chinook sample database (the one data-copilot used), drafted with <code>dgr draft</code> and then given descriptions, synonyms and metrics by hand.</p>
+  <pre>dgr show examples/chinook.semantic_model.yaml
+dgr lineage examples/chinook.semantic_model.yaml <span class="h">METRIC</span>
+dgr ask examples/chinook.semantic_model.yaml <span class="s">"..."</span> \
+    --sqlite chinook.sqlite3</pre>
+  <div class="demo"><b>Demo</b> show the model, pick a metric from the output and trace its lineage, then ask a question and read the CHECKED / FAILED report</div>
+  <aside class="notes">Start with show for the datasets, fields, metrics and joins. Pick a metric from that output for lineage. Then ask a question and point out which datasets were sent to the model and how the verdict was reached.</aside>
+</section>
+
+<section class="slide">
+  <h2>Benchmark on Chinook</h2>
+  <pre>dgr bench benchmarks/chinook/questions.yaml --sqlite chinook.sqlite3</pre>
+  <ul>
+    <li>24 questions, each <b>scored by running it</b> against a reference query: rows, superset, within, mentions.</li>
+    <li>Result files in <code>benchmarks/chinook/results/</code> for <code>claude_cli</code> and <code>llama3.2</code>.</li>
+    <li>Scopes: graph, all, and graph on the drafted model (<code>chinook.drafted.semantic_model.yaml</code>); llama3.2 has second runs.</li>
+    <li>The scores themselves are not in the sources for this deck. See <code>benchmarks/chinook/README.md</code>.</li>
+  </ul>
+  <aside class="notes">These are the same 24 Chinook questions data-copilot used. Answers are scored by running them, not by comparing SQL text. I have not put numbers on this slide because they were not in the material I worked from.</aside>
+</section>
+
+<section class="slide">
+  <h2>From Python</h2>
+  <pre><span class="k">import</span> datagraf <span class="k">as</span> dg
+
+model = dg.load(<span class="s">"tpcds_semantic_model.yaml"</span>)
+G = dg.build(model)   <span class="c"># networkx DiGraph</span>
+up = dg.upstream(G, dg.resolve(G, <span class="s">"customer_lifetime_value"</span>))
+problems = dg.model_problems(model, G)</pre>
+  <ul>
+    <li>The graph runs source → column → field → metric.</li>
+    <li>The CLI is a thin <code>click</code> group over the same functions.</li>
+  </ul>
+  <aside class="notes">Everything the CLI does is also available as a library, which data-copilot never had. The graph is plain networkx, so any graph algorithm works on it.</aside>
+</section>
+
+<section class="slide">
+  <h2>Try it</h2>
+  <pre>pip install -e <span class="s">".[dev]"</span>     <span class="c"># from source; registers dgr</span>
+pytest                      <span class="c"># 78 tests, no network, no LLM</span>
+dgr validate tests/fixtures/ossie/tpcds_semantic_model.yaml</pre>
+  <table>
+    <tr><th>repository</th><th>package</th><th>import</th><th>command</th></tr>
+    <tr><td>data-graph</td><td>data-graf</td><td>datagraf</td><td>dgr</td></tr>
+  </table>
+  <ul>
+    <li>Python 3.11+. The tests build their own SQLite database.</li>
+    <li><code>datagraph</code> was already taken on PyPI (<code>datagraph-core</code>); "graf" matches GraphLang's <code>graf</code>.</li>
+  </ul>
+  <aside class="notes">Install from source and run the tests. They need no network and no model. The names differ on purpose: datagraph was already taken on PyPI.</aside>
+</section>
+
+<section class="slide">
+  <h2>Part of the digital-duck stack</h2>
+  <div class="cols">
+    <ul>
+      <li><span class="tag t-gen">zinet</span> graph format and drawing</li>
+      <li><span class="tag t-io">dd-db</span> database access, read-only</li>
+      <li><span class="tag t-ctl">GraphLang</span> over <b>dd-llm</b>, for the LLM steps</li>
+      <li>Siblings: app-graph, work-graph, concept-book</li>
+    </ul>
+    <div class="card stack">
+      <h3>Why its own package</h3>
+      <div>Profiling and running SQL touch the data, which needs credentials and connectors.</div>
+      <div>work-graph stays a files-only knowledge layer.</div>
+    </div>
+  </div>
+  <aside class="notes">data-graph reuses the shared stack and does not write its own versions. It is not a work-graph area because it has to reach real databases.</aside>
+</section>
+
+<section class="slide">
+  <h2>What is not done yet</h2>
+  <ul>
+    <li>A <b>prototype</b> at version <code>0.1.0.dev1</code>, not yet published on PyPI.</li>
+    <li>A model in another dialect is <b>opaque</b>: its lineage cannot be read from SQL.</li>
+    <li>Only SQLite so far; other dd-db adapters can follow, since only <code>BaseDB</code> methods are used.</li>
+    <li>The thin <code>data</code> area in work-graph, which would call data-graph's reader, is planned.</li>
+  </ul>
+  <aside class="notes">This was started on 2026-11-22 and is early. Non-SQL dialects and other databases are the obvious gaps. The design and next steps are in docs/DEV/plan.md.</aside>
+</section>
+
+<section class="slide">
+  <h2>References</h2>
+  <ul class="refs">
+    <li><a href="https://github.com/digital-duck/data-graph">data-graph</a></li>
+    <li><a href="https://ossie.apache.org/">Apache Ossie</a></li>
+    <li><a href="https://github.com/apache/ossie">apache/ossie (schemas and example models)</a></li>
+    <li><a href="https://github.com/digital-duck/zinet">zinet</a></li>
+    <li><a href="https://github.com/digital-duck/graflang">GraphLang</a></li>
+    <li><a href="https://github.com/digital-duck/data-copilot">data-copilot</a></li>
+  </ul>
+  <aside class="notes">The Ossie schemas and test fixtures come from apache/ossie under Apache-2.0, and data-graph is Apache-2.0 too. See NOTICE in the repository.</aside>
+</section>
+
+<section class="slide">
+  <div style="margin:auto 0">
+    <h2>Questions?</h2>
+  </div>
+  <aside class="notes">Thank you. I'm happy to take questions, or to run another command live on the Chinook model.</aside>
+</section>
+</div>
+
+<script>
+(function () {
+  // the outline slide is built from the other slides' titles, so it cannot drift when a slide is added or renamed
+  (function () {
+    const all = [...document.querySelectorAll('.slide')], toc = document.getElementById('toc');
+    if (!toc) return;
+    all.forEach((sl, k) => {
+      const h = sl.querySelector('h2');
+      if (!h || sl === toc.closest('.slide')) return;
+      const li = document.createElement('li');
+      li.innerHTML = '<span class="n">' + (k + 1) + '</span><span>' + h.innerHTML + '</span>';
+      li.onclick = e => { e.stopPropagation(); window.__show && window.__show(k); };
+      toc.appendChild(li);
+    });
+  })();
+  const slides = [...document.querySelectorAll('.slide')];
+  const bar = document.getElementById('bar');
+  let i = Math.min(Math.max(parseInt(location.hash.slice(1), 10) - 1 || 0, 0), slides.length - 1);
+  let overview = false;
+
+  function notesBox() {
+    let box = document.getElementById('notes-box');
+    if (!box) { box = document.createElement('div'); box.id = 'notes-box'; document.body.appendChild(box); }
+    const aside = slides[i].querySelector('.notes');
+    box.innerHTML = aside ? aside.innerHTML : '';
+  }
+  function show(n) {
+    i = Math.min(Math.max(n, 0), slides.length - 1);
+    slides.forEach((s, k) => s.classList.toggle('on', k === i));
+    ['first', 'prev'].forEach(id => document.getElementById(id).disabled = i === 0);
+    ['next', 'last'].forEach(id => document.getElementById(id).disabled = i === slides.length - 1);
+    bar.style.width = ((i + 1) / slides.length * 100) + '%';
+    history.replaceState(null, '', '#' + (i + 1));
+    notesBox();
+    // page number in the corner of every slide but the first
+    slides.forEach((s, k) => {
+      let f = s.querySelector('.foot');
+      if (!f && k > 0) { f = document.createElement('div'); f.className = 'foot'; f.innerHTML = '<span></span><span></span>'; f.firstElementChild.textContent = document.body.dataset.title; s.appendChild(f); }
+      if (f && k > 0) f.lastElementChild.textContent = (k + 1) + ' / ' + slides.length;
+    });
+  }
+  window.__show = show;
+  function toggleOverview() {
+    overview = !overview;
+    const deck = document.getElementById('deck');
+    if (overview) {
+      deck.style.cssText = 'position:static;display:grid;grid-template-columns:repeat(3,1fr);gap:14px;padding:14px;place-items:start';
+      slides.forEach((s, k) => { s.classList.add('on'); s.style.cssText = 'width:100%;height:auto;aspect-ratio:16/9;font-size:9px;cursor:pointer'; s.onclick = () => { toggleOverview(); show(k); }; });
+      document.documentElement.style.overflow = 'auto'; document.body.style.overflow = 'auto';
+    } else {
+      deck.style.cssText = '';
+      slides.forEach(s => { s.style.cssText = ''; s.onclick = null; });
+      document.documentElement.style.overflow = ''; document.body.style.overflow = '';
+      show(i);
+    }
+  }
+  const go = (id, f) => document.getElementById(id).addEventListener('click', e => { e.stopPropagation(); if (!overview) f(); });
+  const outline = Math.max(0, slides.findIndex(s => s.id === 'outline'));
+  go('tocbtn', () => show(outline)); go('first', () => show(0)); go('prev', () => show(i - 1)); go('next', () => show(i + 1)); go('last', () => show(slides.length - 1));
+  document.getElementById('pdf').addEventListener('click', () => { if (overview) toggleOverview(); window.print(); });
+  document.addEventListener('keydown', e => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (['ArrowRight', 'PageDown', ' ', 'Enter'].includes(e.key)) { e.preventDefault(); if (!overview) show(i + 1); }
+    else if (['ArrowLeft', 'PageUp', 'Backspace'].includes(e.key)) { e.preventDefault(); if (!overview) show(i - 1); }
+    else if (e.key === 't' || e.key === 'T') { if (!overview) show(outline); }
+    else if (e.key === 'Home') show(0);
+    else if (e.key === 'End') show(slides.length - 1);
+    else if (e.key === 'f' || e.key === 'F') { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen(); }
+    else if (e.key === 'n' || e.key === 'N') document.body.classList.toggle('show-notes');
+    else if (e.key === 'o' || e.key === 'O' || e.key === 'Escape' && overview) toggleOverview();
+  });
+  document.addEventListener('click', e => {
+    if (overview || e.target.closest('a, button, pre')) return;
+    show(e.clientX > innerWidth / 2 ? i + 1 : i - 1);
+  });
+  show(i);
+})();
+</script>
+</body>
+</html>
