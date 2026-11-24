@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 
 import click
+from zinet.click_helpers import HELP_OPTION_NAMES, FullHelpGroup
 import yaml
 
 from . import __version__
@@ -34,7 +35,7 @@ def _print_problems(problems: list[dict]) -> None:
         click.echo(f"  {p['severity']:7} {p['code']}{where}: {p['message']}")
 
 
-@click.group()
+@click.group(cls=FullHelpGroup, context_settings={"help_option_names": HELP_OPTION_NAMES})
 @click.version_option(__version__, prog_name="dgr")
 def main() -> None:
     """Lineage, checks and profiling for Apache Ossie semantic models."""
