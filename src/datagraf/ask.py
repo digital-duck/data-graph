@@ -3,8 +3,9 @@
 context()   the semantic model, narrowed by the graph: the datasets a question names (by name, synonym, description, field or
             metric), plus every dataset on the join paths between them. Vector similarity is a poor guide to which tables a
             query needs (anadata's finding: "invoice_items" shares no word with "best-selling albums"); join paths are exact.
-check_sql() one read-only statement; every table and column real (sqlglot, against the database's own catalogue); joins
-            compared with the model's relationships (a join that is not declared is a warning); then run, read-only.
+check_sql() one read-only statement; every table and column real (sqlglot, against the database's own catalogue); every
+            recursive CTE has a stop condition; joins compared with the model's relationships (a join that is not declared
+            is a warning); then run, read-only and bounded (rows, time, free disk: see limits.py).
 """
 from __future__ import annotations
 
@@ -19,6 +20,8 @@ from sqlglot.errors import OptimizeError, ParseError, TokenError
 from sqlglot.optimizer.qualify import qualify
 
 from . import lineage as L
+from . import limits
+from .limits import QueryLimitExceeded, limit_hint, select
 from .model import SemanticModel
 from .sqlite import connect
 
@@ -146,6 +149,33 @@ def _clean(v: Any) -> Any:
     return v if isinstance(v, (int, float, str)) or v is None else str(v)
 
 
+def unbounded_recursion(tree: exp.Expression) -> list[str]:
+    """Recursive CTEs with no stop condition: neither a WHERE on the recursive part nor a LIMIT inside the CTE.
+
+    Such a CTE never ends on its own (`SELECT 1 UNION ALL SELECT x + 1 FROM c`). A WHERE does not prove that it ends
+    (`WHERE x > 0` does not), which is why the query also runs under a time limit; this check catches the plain case early,
+    with a message the model can act on."""
+    out = []
+    for w in tree.find_all(exp.With):
+        if not w.args.get("recursive"):
+            continue
+        for cte in w.expressions:
+            name, body = cte.alias_or_name.lower(), cte.this
+            if not isinstance(body, exp.Union) or body.args.get("limit") is not None:
+                continue
+            members, stack = [], [body]
+            while stack:                                       # a UNION of several members nests to the left
+                u = stack.pop()
+                for side in (u.left, u.right):
+                    (stack if isinstance(side, exp.Union) else members).append(side)
+            for m in members:
+                refers = any(t.name.lower() == name for t in m.find_all(exp.Table))
+                if refers and isinstance(m, exp.Select) and m.args.get("where") is None:
+                    out.append(cte.alias_or_name)
+                    break
+    return out
+
+
 def check_sql(reply: str, model: SemanticModel, db_path: str, row_limit: int = 20) -> dict:
     """{ok, error, sql, columns, rows, row_count, uses, warnings}. `error` is written for the model to act on."""
     sql = extract_sql(reply)
@@ -161,6 +191,10 @@ def check_sql(reply: str, model: SemanticModel, db_path: str, row_limit: int = 2
     tree = trees[0]
     if not isinstance(tree, exp.Query):
         return {**base, "error": f"only a read-only SELECT (or WITH ... SELECT) is allowed, not {tree.key.upper()}"}
+    endless = unbounded_recursion(tree)
+    if endless:
+        return {**base, "error": f"the recursive CTE {', '.join(endless)} has no stop condition, so it never ends: add a WHERE "
+                                 "to its recursive part (e.g. WHERE n < 100), or a LIMIT inside it"}
     db = connect(db_path)
     cat = catalogue(db)
     lower = {t.lower(): t for t in cat}
@@ -212,13 +246,22 @@ def check_sql(reply: str, model: SemanticModel, db_path: str, row_limit: int = 2
                 if pa[0] in by_table and pb[0] in by_table and frozenset((pa, pb)) not in declared:
                     warnings.append(f"join {pa[0]}.{pa[1]} = {pb[0]}.{pb[1]} is not a relationship of the model")
 
+    found = {"uses": list(dict.fromkeys(uses)), "warnings": warnings}
     try:
-        df = db.run_query(sql)
+        res = select(db, sql, max_rows=row_limit)      # at most row_limit rows are fetched, under the time and disk limits
+    except QueryLimitExceeded as e:
+        return {**base, **found, "error": f"the query was stopped: {limit_hint(e)}"}
     except Exception as e:                       # the database's own message, e.g. a misuse of an aggregate
-        return {**base, "uses": list(dict.fromkeys(uses)), "warnings": warnings, "error": f"the database refused it: {e}"}
-    rows = [[_clean(v) for v in r] for r in df.head(row_limit).itertuples(index=False, name=None)]
-    return {**base, "ok": True, "error": "", "columns": [str(c) for c in df.columns], "rows": rows, "row_count": int(len(df)),
-            "uses": list(dict.fromkeys(uses)), "warnings": warnings}
+        return {**base, **found, "error": f"the database refused it: {e}"}
+    row_count: int | None = len(res.rows)
+    if res.truncated:                            # how many there are, if counting them also stays within the limits
+        try:
+            row_count = int(select(db, f"SELECT COUNT(*) FROM ({sql})", max_rows=1, timeout_s=limits.COUNT_TIMEOUT_S).rows.iat[0, 0])
+        except Exception:
+            row_count = None
+    rows = [[_clean(v) for v in r] for r in res.rows.itertuples(index=False, name=None)]
+    return {**base, **found, "ok": True, "error": "", "columns": [str(c) for c in res.rows.columns], "rows": rows,
+            "row_count": row_count, "more": res.truncated}
 
 
 def report(question: str, check: dict, attempts: int) -> dict:
@@ -226,11 +269,14 @@ def report(question: str, check: dict, attempts: int) -> dict:
     lines = [f"Question: {question}", "", "SQL:", check.get("sql") or "(none)", ""]
     if check.get("ok"):
         cols, rows, n = check["columns"], check["rows"], check["row_count"]
-        lines.append(f"CHECKED: every table and column exists, it is read-only, and it ran ({n} row{'s' if n != 1 else ''}).")
+        count = f"more than {len(rows)} rows" if n is None else f"{n} row{'s' if n != 1 else ''}"
+        lines.append(f"CHECKED: every table and column exists, it is read-only, and it ran ({count}).")
         if cols:
             lines += ["", " | ".join(cols), " | ".join("---" for _ in cols)]
             lines += [" | ".join("" if v is None else str(v) for v in r) for r in rows]
-            if n > len(rows):
+            if n is None:
+                lines.append("... more (too many to count within the time limit)")
+            elif n > len(rows):
                 lines.append(f"... {n - len(rows)} more")
         if check.get("uses"):
             lines += ["", "Uses: " + ", ".join(f"[{u}]" for u in check["uses"])]

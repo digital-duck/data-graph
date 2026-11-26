@@ -14,6 +14,7 @@ import yaml
 
 from . import checks as C
 from . import lineage as L
+from .limits import select
 from .model import ModelError, _model, raw_models
 from .sqlite import connect, draft as catalogue_draft, profile, q
 
@@ -38,8 +39,8 @@ def skeleton(db_path: str, name: str = "", sample_rows: int = 3) -> dict:
     out = []
     for d in doc["datasets"]:
         t = d["source"]
-        df = db.run_query(f"SELECT * FROM {q(t)} LIMIT {int(sample_rows)}")
-        n = db.run_query(f"SELECT COUNT(*) AS n FROM {q(t)}").iat[0, 0]
+        df = select(db, f"SELECT * FROM {q(t)}", max_rows=int(sample_rows)).rows
+        n = select(db, f"SELECT COUNT(*) AS n FROM {q(t)}", max_rows=1).rows.iat[0, 0]
         out.append(f"## {t} ({int(n)} rows)")
         out.append(df.to_string(index=False, max_colwidth=40) if len(df) else "(empty)")
     return {"skeleton": yaml.safe_dump(doc, sort_keys=False, allow_unicode=True), "samples": "\n".join(out)}

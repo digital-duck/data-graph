@@ -1,6 +1,7 @@
 # ask: a question about a database with an Ossie semantic model -> the model narrowed by the graph (program: the datasets the
 # question names plus the join paths between them) -> SQL (model) -> a check (program: one read-only SELECT, every table and
-# column real, joins compared with the model's relationships, run read-only) -> up to max_repairs repairs while it fails
+# column real, every recursive CTE stopped, joins compared with the model's relationships, run read-only and bounded)
+# -> up to max_repairs repairs while it fails
 # -> a report whose status a program decided: checked or failed. The database is opened read-only; nothing is written.
 version: "1.0-graph"
 workflow:
@@ -11,7 +12,7 @@ workflow:
     - {name: model, type: TEXT, description: absolute path to the Ossie semantic model}
     - {name: db, type: TEXT, description: absolute path to the SQLite database (opened read-only)}
     - {name: scope, type: TEXT, default: graph, description: "graph: the datasets the question needs, by join paths; all: the whole model"}
-    - {name: row_limit, type: INTEGER, default: 20, description: rows shown in the report (the query itself is not limited)}
+    - {name: row_limit, type: INTEGER, default: 20, description: "rows fetched and shown in the report; the query runs bounded (rows, 30 s, 1 GiB free disk: limits.py)"}
     - {name: max_repairs, type: INTEGER, default: 2}
   outputs:
     - {name: sql, type: TEXT}

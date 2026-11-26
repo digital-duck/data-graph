@@ -6,7 +6,7 @@ data-graph: lineage, checks and profiling for Apache Ossie semantic models. Plan
 
 ```bash
 pip install -e ".[dev]"
-pytest                      # 78 tests; no network, no LLM; builds its own SQLite database
+pytest                      # 102 tests; no network, no LLM; builds its own SQLite database
 dgr validate tests/fixtures/ossie/tpcds_semantic_model.yaml
 ```
 
@@ -22,7 +22,12 @@ dgr validate tests/fixtures/ossie/tpcds_semantic_model.yaml
   i.e. `mode=ro` + `PRAGMA query_only`). Uses only `BaseDB` methods, so other dd-db adapters can follow.
 - `ask.py`: the program half of the `ask` recipe: `context()` (the model narrowed by join paths), `check_sql()`, `report()`.
 - `draft.py`: the program half of `ossie_draft`: `skeleton()`, `check()` (structure unchanged, metrics run), `write()`.
-- `bench.py`: scoring answers by running them against reference queries (rows / superset / within / mentions).
+- `bench.py`: scoring answers by running them against reference queries (rows / superset / within / mentions), compared
+  as rows: each reference column gets its own answer column, and the projected rows must pair up (`matches`).
+- `limits.py`: every query data-graph runs (a model's SQL, a benchmark's, a semantic model's expressions) goes through
+  dd-db's `run_select` (≥ 0.1.4): at most `max_rows` rows, `QUERY_TIMEOUT_S`, `MIN_FREE_BYTES` free where SQLite writes
+  temporary files. Never call `run_query` on SQL you did not write. `ask.check_sql` also refuses a recursive CTE with no
+  stop condition (`unbounded_recursion`) before running it, and the `ask` prompts ask for queries that finish.
 - `recipes/<name>/`: the GraphLang recipes `ask` and `ossie_draft` (graph, prompts, Cedar policy, error codes).
   `steps.py` holds their SOLVE steps, run as `python3 -I -m datagraf.tool STEP`, with JSON on stdin and stdout; `run.py`
   runs a recipe through `graphlang.recipes` (default `claude_cli`, logs in `~/data-graf/logs`).

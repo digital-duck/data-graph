@@ -1,7 +1,8 @@
 """Databases, through dd-db: draft an Ossie skeleton from a catalogue, and profile the data behind a model. Read-only.
 
 The connection is dd-db's `SQLiteDB(path, read_only=True)` (`mode=ro` plus `PRAGMA query_only`), so nothing here can
-write. Identifiers come from the model or the catalogue and are always quoted; values are never interpolated.
+write. Identifiers come from the model or the catalogue and are always quoted; values are never interpolated. A model's
+field and metric expressions are SQL, so every query runs under data-graph's limits (rows, time, free disk; limits.py).
 dd-db has adapters for DuckDB, Postgres, Snowflake and more; `draft` and `profile` use only `BaseDB` methods, so
 another adapter is a matter of `connect()` (see docs/DEV/plan.md, "Next").
 """
@@ -12,6 +13,7 @@ from typing import Any
 
 from dd_db import BaseDB, SQLiteDB
 
+from .limits import QueryLimitExceeded, limit_hint, select
 from .model import SemanticModel
 
 _TYPES = (("INT", "Integer"), ("CHAR", "String"), ("CLOB", "String"), ("TEXT", "String"), ("REAL", "Float"),
@@ -40,14 +42,21 @@ def ossie_type(decl: str) -> str | None:
     return None
 
 
+def _first(db: BaseDB, sql: str):
+    """The first row of a query, under the limits; a stopped query raises with a message that says why."""
+    try:
+        return select(db, sql, max_rows=1).rows.iloc[0]
+    except QueryLimitExceeded as e:
+        raise RuntimeError(limit_hint(e)) from None
+
+
 def _scalar(db: BaseDB, sql: str) -> Any:
-    df = db.run_query(sql)
-    v = df.iat[0, 0]
+    v = _first(db, sql).iloc[0]
     return v.item() if hasattr(v, "item") else v          # numpy scalar -> Python
 
 
 def _row(db: BaseDB, sql: str) -> list:
-    return [v.item() if hasattr(v, "item") else v for v in db.run_query(sql).iloc[0].tolist()]
+    return [v.item() if hasattr(v, "item") else v for v in _first(db, sql).tolist()]
 
 
 def draft(db: str | Path | BaseDB, name: str | None = None, version: str = "0.3.0.dev0") -> dict:
